@@ -1,0 +1,41 @@
+.h-screen { height: 100vh; }
+.w-full { width: 100%; }
+
+/* Gutter Styling */
+.gutter {
+  background-color: #161b22;
+  background-repeat: no-repeat;
+  background-position: center;
+  cursor: col-resize;
+}
+
+.gutter:hover {
+  background-color: #21262d;
+}
+
+.split {
+  display: flex;
+}
+
+/* Leaflet Overrides */
+.leaflet-container {
+  background: #0d1117 !important;
+  outline: 0;
+}
+
+/* Hide Chart.js Tooltips lag */
+canvas {
+  max-width: 100%;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: #0b0e14;
+}
+::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 10px;
+}

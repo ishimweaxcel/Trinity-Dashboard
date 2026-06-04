@@ -387,6 +387,8 @@ function ChartInner({built,chartType,isDark}){
                 text:`${lbl}  ${built.percentages[i]}%`,
                 fillStyle:ds.backgroundColor[i],
                 strokeStyle:ds.backgroundColor[i],
+                fontColor:tc,
+                color:tc,
                 lineWidth:0,hidden:false,index:i,
               }));
             },
@@ -423,7 +425,13 @@ function ChartWidget({layers,visibleFeatsByLayer,config,onConfigChange,isDark,co
   const fields=useMemo(()=>Object.keys(layer?.geojson?.features?.[0]?.properties||{}),[layer]);
 
   // Visible features for THIS layer — not a shared global
-  const visibleFeats=useMemo(()=>visibleFeatsByLayer[String(layer?.id)]||[],[visibleFeatsByLayer,layer]);
+  // Fall back to all features if bounds haven't been computed yet (first load)
+  const visibleFeats=useMemo(()=>{
+    const vf=visibleFeatsByLayer[String(layer?.id)];
+    if(vf&&vf.length>0) return vf;
+    // If no visible computed yet, use all features so chart shows immediately
+    return layer?.geojson?.features||[];
+  },[visibleFeatsByLayer,layer]);
 
   // ColorMap derived directly from this layer's full data for this field
   const colorMap=useMemo(()=>buildColorMap(layer?.geojson?.features||[],field),[layer,field]);
@@ -431,7 +439,7 @@ function ChartWidget({layers,visibleFeatsByLayer,config,onConfigChange,isDark,co
   const built=useMemo(()=>buildChartData(visibleFeats,field,geomType,chartMode||"count",colorMap),
     [visibleFeats,field,geomType,chartMode,colorMap]);
 
-  const chartKey=`${layer?.id}_${field}_${chartType}_${chartMode}_${visibleFeats.length}`;
+  const chartKey=`${layer?.id}_${field}_${chartType}_${chartMode}_${visibleFeats.length}_${isDark?'dk':'lt'}`;
   const effectiveMode=chartMode||(geomType==="Polygon"?"area":"count");
 
   if(compact) return(
@@ -627,6 +635,59 @@ function NorthArrow(){
         <polygon points="14,22 16.5,14 14,16 11.5,14" fill="var(--border)"/>
       </svg>
     </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   GEOLOCATION BUTTON
+═══════════════════════════════════════════ */
+function GeolocateButton({mapRef}){
+  const [loading,setLoading]=useState(false);
+  const [active,setActive]=useState(false);
+  const markerRef=useRef(null);
+
+  const locate=()=>{
+    if(!navigator.geolocation){alert("Geolocation not supported by your browser.");return;}
+    setLoading(true);
+    navigator.geolocation.getCurrentPosition(pos=>{
+      setLoading(false);setActive(true);
+      const {latitude:lat,longitude:lng}=pos.coords;
+      if(!mapRef.current) return;
+      const L=window.L;
+      if(markerRef.current){markerRef.current.remove();markerRef.current=null;}
+      mapRef.current.setView([lat,lng],15);
+      markerRef.current=L.circleMarker([lat,lng],{
+        radius:10,color:"#C8922A",fillColor:"#C8922A",fillOpacity:0.35,weight:3,
+      }).addTo(mapRef.current)
+        .bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;color:#1A2B4A;padding:4px"><strong>You are here</strong><br/><span style="color:#7a8fa8;font-size:10px">${lat.toFixed(5)}, ${lng.toFixed(5)}</span></div>`)
+        .openPopup();
+      setTimeout(()=>setActive(false),3000);
+    },err=>{
+      setLoading(false);
+      const msgs={1:"Location access denied.",2:"Location unavailable.",3:"Location request timed out."};
+      alert(msgs[err.code]||"Location error.");
+    },{enableHighAccuracy:true,timeout:10000,maximumAge:60000});
+  };
+
+  return(
+    <button onClick={locate} title="Go to my location"
+      style={{width:38,height:38,borderRadius:10,
+        background:active?"var(--accent)":loading?"var(--panel2)":"var(--panel)",
+        border:`1.5px solid ${active?"var(--accent)":"var(--border)"}`,
+        cursor:loading?"not-allowed":"pointer",display:"flex",
+        alignItems:"center",justifyContent:"center",
+        color:active?"#fff":"var(--text-muted)",
+        boxShadow:"0 2px 8px var(--shadow)",transition:"all 0.15s"}}
+      onMouseEnter={e=>{if(!loading&&!active){e.currentTarget.style.borderColor="var(--accent)";e.currentTarget.style.color="var(--accent)";}}}
+      onMouseLeave={e=>{if(!active){e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.color="var(--text-muted)";}}}
+      disabled={loading}>
+      {loading
+        ?<div style={{width:14,height:14,border:"2px solid var(--accent)",borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
+        :<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/>
+        </svg>
+      }
+    </button>
   );
 }
 
@@ -857,18 +918,20 @@ function FilterPanel({fields,features,filters,onFiltersChange,onClose}){
 /* ═══════════════════════════════════════════
    EXPORT MODAL — dismisses itself before capture
 ═══════════════════════════════════════════ */
-function ExportModal({dashboardRef,mapDivRef,projectTitle,onClose}){
+function ExportModal({dashboardRef,mapDivRef,editorRef,projectTitle,onClose}){
   const [exporting,setExporting]=useState(false);
-  const [done,setDone]=useState("");
 
   const doExport=async mode=>{
-    // Step 1: close the modal completely, wait for DOM update
     onClose();
     await new Promise(r=>setTimeout(r,350));
     setExporting(true);
     try{
-      const target=mode==="map"?mapDivRef.current:dashboardRef.current;
-      const canvas=await window.html2canvas(target,{useCORS:true,allowTaint:true,scale:2,logging:false});
+      let target;
+      if(mode==="map") target=mapDivRef.current;
+      else if(mode==="dashboard") target=dashboardRef.current||editorRef.current;
+      else target=dashboardRef.current||editorRef.current; // pdf
+      const canvas=await window.html2canvas(target,{useCORS:true,allowTaint:true,scale:2,logging:false,
+        ignoreElements:el=>el.classList?.contains('leaflet-control-zoom')});
       if(mode==="pdf"){
         const pdf=new window.jspdf.jsPDF({orientation:"landscape",unit:"px",format:[canvas.width/2,canvas.height/2]});
         pdf.addImage(canvas.toDataURL("image/png"),"PNG",0,0,canvas.width/2,canvas.height/2);
@@ -944,15 +1007,14 @@ function LayoutPicker({onPick,onClose}){
 }
 
 /* ═══════════════════════════════════════════
-   MAP PANEL (extracted for reuse in layouts)
+   MAP OVERLAY  — controls/UI only, no mapDiv
+   The actual Leaflet div is always mounted in
+   Dashboard and CSS-positioned over this slot.
 ═══════════════════════════════════════════ */
-function MapPanel({mapDivRef,layers,visibleFeatsByLayer,customColorMap,customShapeMap,customOpacityMap,layerOpacity,
-  primaryLayerId,primaryField,applyFilters,basemap,showLabels,labelField,
-  measureMode,setMeasureMode,measureResult,setMeasureResult,
-  basemapOpen,setBasemapOpen,setBasemap,mapRef,isDark}){
+function MapOverlay({layers,basemap,basemapOpen,setBasemapOpen,setBasemap,
+  mapRef,isDark,measureMode,setMeasureMode,measureResult,setMeasureResult}){
   return(
-    <div style={{position:"relative",width:"100%",height:"100%",overflow:"hidden"}}>
-      <div ref={mapDivRef} style={{width:"100%",height:"100%"}}/>
+    <>
       <NorthArrow/>
       {/* Toolbar */}
       <div style={{position:"absolute",left:12,top:12,zIndex:500,display:"flex",gap:7}}>
@@ -986,7 +1048,6 @@ function MapPanel({mapDivRef,layers,visibleFeatsByLayer,customColorMap,customSha
           </Btn>
         ))}
       </div>
-      {/* Measure result */}
       {measureResult&&(
         <div style={{position:"absolute",left:"50%",top:60,transform:"translateX(-50%)",zIndex:500,
           background:"var(--panel)",border:"1.5px solid var(--accent)",borderRadius:10,
@@ -1020,6 +1081,7 @@ function MapPanel({mapDivRef,layers,visibleFeatsByLayer,customColorMap,customSha
             <Icon name={ic} size={16}/>
           </button>
         ))}
+        <GeolocateButton mapRef={mapRef}/>
         <GeocoderSearch mapRef={mapRef}/>
       </div>
       {/* Status bar */}
@@ -1048,6 +1110,78 @@ function MapPanel({mapDivRef,layers,visibleFeatsByLayer,customColorMap,customSha
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+/* MapPanel kept for compatibility — delegates to MapSlot */
+function MapPanel({mapDivRef,...rest}){
+  return(
+    <div style={{position:"relative",width:"100%",height:"100%",overflow:"hidden"}}>
+      <MapSlot mapProps={{...rest,mapDivRef}} isDark={rest.isDark}/>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   MAP SLOT — placeholder div that positions
+   the persistent Leaflet mapDiv over itself.
+═══════════════════════════════════════════ */
+function MapSlot({mapProps,isDark,gridArea,style={}}){
+  const slotRef=useRef(null);
+
+  useEffect(()=>{
+    const slot=slotRef.current;
+    const mapDiv=mapProps.mapDivRef?.current;
+    if(!slot||!mapDiv) return;
+
+    function reposition(){
+      const host=document.getElementById("geocore-app-root");
+      if(!host) return;
+      const sr=slot.getBoundingClientRect();
+      const hr=host.getBoundingClientRect();
+      mapDiv.style.position="absolute";
+      mapDiv.style.top   =(sr.top -hr.top )+"px";
+      mapDiv.style.left  =(sr.left-hr.left)+"px";
+      mapDiv.style.width =sr.width+"px";
+      mapDiv.style.height=sr.height+"px";
+      mapDiv.style.display="block";
+      mapDiv.style.zIndex="10";
+      mapProps.mapRef?.current?.invalidateSize({animate:false});
+    }
+
+    // Run immediately then again after layout settles
+    reposition();
+    const t1=setTimeout(reposition,80);
+    const t2=setTimeout(reposition,300);
+
+    const ro=new ResizeObserver(reposition);
+    ro.observe(slot);
+    window.addEventListener("resize",reposition);
+
+    return()=>{
+      clearTimeout(t1);clearTimeout(t2);
+      ro.disconnect();
+      window.removeEventListener("resize",reposition);
+      // Hide the mapDiv when this slot is unmounted
+      if(mapDiv) mapDiv.style.display="none";
+    };
+  },[]);
+
+  const areaStyle=gridArea?{gridArea,...style}:style;
+  return(
+    <div ref={slotRef} style={{width:"100%",height:"100%",position:"relative",...areaStyle}}>
+      <MapOverlay {...mapProps} isDark={isDark}/>
+    </div>
+  );
+}
+
+/* Wrapper for map slot in dashboard layouts */
+function MapSlotWrapper({gridArea,mapProps,isDark}){
+  return(
+    <div style={{gridArea,overflow:"hidden",position:"relative",
+      border:"1px solid var(--border)",borderRadius:4}}>
+      <MapSlot mapProps={mapProps} isDark={isDark}/>
     </div>
   );
 }
@@ -1072,10 +1206,7 @@ function LayoutView({layoutKey,slots,onSlotChange,layers,visibleFeatsByLayer,map
   const renderSlot=(slotKey)=>{
     const slotCfg=slots[slotKey]||{type:"chart",layerId:"",field:"",chartType:"bar",chartMode:"count"};
     if(slotCfg.type==="map") return(
-      <div style={{gridArea:areas[slotKey],overflow:"hidden",position:"relative",
-        border:"1px solid var(--border)",borderRadius:4}}>
-        <MapPanel {...mapProps} isDark={isDark}/>
-      </div>
+      <MapSlotWrapper key="map-slot" gridArea={areas[slotKey]} mapProps={mapProps} isDark={isDark}/>
     );
     if(slotCfg.type==="legend") return(
       <div style={{gridArea:areas[slotKey],overflow:"hidden",background:"var(--panel)",
@@ -1341,13 +1472,21 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
   const mapRef=useRef(null),mapDivRef=useRef(null),tileRef=useRef(null);
   const geoLayerRef=useRef(null),labelLayerRef=useRef(null),measureRef=useRef(null);
   const boundsTimer=useRef(null),saveTimer=useRef(null),dashRef=useRef(null);
+  const editorBodyRef=useRef(null);
 
   const [project]       =useState(initProject);
   const [layers,setLayers]=useState(initProject.layers||[]);
   const [filters,setFilters]=useState(initProject.filters||[]);
 
   // Per-layer visible features — keyed by String(layer.id)
-  const [visibleFeatsByLayer,setVisibleFeatsByLayer]=useState({});
+  // Pre-populate with all features so charts & counts show immediately
+  const [visibleFeatsByLayer,setVisibleFeatsByLayer]=useState(()=>{
+    const init={};
+    (initProject.layers||[]).forEach(l=>{
+      if(l.geojson?.features) init[String(l.id)]=l.geojson.features;
+    });
+    return init;
+  });
 
   // Sidebar charts — each is fully self-contained
   const [sidebarCharts,setSidebarCharts]=useState(
@@ -1371,6 +1510,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
   const [layoutSlots,setLayoutSlots]=useState(initProject.layoutSlots||{});
   const [viewMode,setViewMode]=useState("editor"); // "editor" | "dashboard"
   const [layoutPickerOpen,setLayoutPickerOpen]=useState(false);
+  const [chartsHidden,setChartsHidden]=useState(false);
 
   // Map
   const [basemap,setBasemap]=useState(initProject.basemap||"Satellite");
@@ -1452,15 +1592,32 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
 
   /* Init Leaflet */
   useEffect(()=>{
-    if(!mapDivRef.current||mapRef.current) return;
+    if(!mapDivRef.current) return;
+    // Destroy old instance if exists (handles re-opening a project)
+    if(mapRef.current){mapRef.current.remove();mapRef.current=null;}
     const L=window.L;
+    mapDivRef.current.style.display="none"; // hidden until MapSlot positions it
+    mapDivRef.current.style.position="absolute";
+    mapDivRef.current.style.zIndex="10";
     const map=L.map(mapDivRef.current,{center:RWANDA.center,zoom:RWANDA.zoom,zoomControl:false,preferCanvas:true});
     tileRef.current=L.tileLayer(BASEMAPS[basemap],{maxZoom:20}).addTo(map);
     L.control.scale({imperial:false,position:"bottomleft"}).addTo(map);
     map.on("mousemove",e=>setCoordDisplay(`${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`));
     map.on("moveend zoomend",()=>{clearTimeout(boundsTimer.current);boundsTimer.current=setTimeout(()=>updateAllVisible(map.getBounds()),130);});
     mapRef.current=map;
+    return()=>{
+      if(mapRef.current){mapRef.current.remove();mapRef.current=null;}
+    };
   },[]);
+
+  /* Invalidate map size whenever layout changes (view toggle, sidebar hide, layout switch) */
+  useEffect(()=>{
+    if(!mapRef.current) return;
+    // Double rAF ensures the DOM has fully reflowed
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      mapRef.current?.invalidateSize({animate:false});
+    }));
+  },[viewMode,chartsHidden,layoutKey]);
 
   /* Basemap */
   useEffect(()=>{
@@ -1534,7 +1691,14 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
 
   useEffect(()=>{
     if(!mapRef.current) return;
-    updateAllVisible(mapRef.current.getBounds());
+    // Use timeout to ensure map has rendered the new layer first
+    const tid=setTimeout(()=>{
+      try{
+        const b=mapRef.current.getBounds();
+        if(b)updateAllVisible(b);
+      }catch{}
+    },50);
+    return()=>clearTimeout(tid);
   },[layers,applyFilters]);
 
   /* Redraw map */
@@ -1713,7 +1877,8 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
 
   /* ═══ RENDER ═══ */
   return(
-    <div style={{display:"flex",flexDirection:"column",height:"100vh",
+    <div id="geocore-app-root" data-maphost="true" style={{display:"flex",flexDirection:"column",height:"100vh",
+      position:"relative",overflow:"hidden",
       background:"var(--bg)",fontFamily:"Inter,DM Sans,sans-serif",color:"var(--text)"}}>
 
       {/* TOPBAR */}
@@ -1778,7 +1943,15 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
             <Icon name={isDark?"sun":"moon"} size={14}/>
           </button>
           {/* View toggle */}
-          <Btn onClick={()=>setViewMode(p=>p==="editor"?"dashboard":"editor")}
+          <Btn onClick={()=>{
+            setViewMode(p=>{
+              const next=p==="editor"?"dashboard":"editor";
+              // Invalidate after DOM settles
+              setTimeout(()=>mapRef.current?.invalidateSize({animate:false}),120);
+              setTimeout(()=>mapRef.current?.invalidateSize({animate:false}),400);
+              return next;
+            });
+          }}
             active={viewMode==="dashboard"}
             title={viewMode==="editor"?"Switch to Dashboard View":"Switch to Editor"}>
             <Icon name={viewMode==="editor"?"view":"edit2"} size={13}
@@ -1807,8 +1980,12 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
         </div>
       </header>
 
+      {/* PERSISTENT MAP DIV — always in DOM, positioned by JS into the current map slot */}
+      <div ref={mapDivRef} id="leaflet-persistent-map"
+        style={{position:"absolute",zIndex:10,background:"transparent"}}/>
+
       {/* BODY */}
-      <div style={{display:"flex",flex:1,overflow:"hidden",position:"relative"}}>
+      <div ref={editorBodyRef} style={{display:"flex",flex:1,overflow:"hidden",position:"relative"}}>
         {viewMode==="dashboard"?(
           /* ═══ DASHBOARD LAYOUT VIEW ═══ */
           <div ref={dashRef} style={{flex:1,overflow:"hidden"}}>
@@ -1827,6 +2004,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
           /* ═══ EDITOR VIEW ═══ */
           <>
             {/* Sidebar */}
+            {!chartsHidden&&(
             <div style={{width:380,flexShrink:0,background:"var(--panel)",
               borderRight:"1.5px solid var(--border)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
               {/* Sidebar header */}
@@ -2001,10 +2179,21 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
                 <span style={{fontSize:10,color:"var(--accent)",fontWeight:700,letterSpacing:"0.06em"}}>GEOCORE v7</span>
               </div>
             </div>
+            )}
+            {/* Collapse/expand sidebar toggle */}
+            <button onClick={()=>setChartsHidden(p=>!p)} title={chartsHidden?"Show analytics panel":"Hide analytics panel"}
+              style={{position:"absolute",left:chartsHidden?0:380,top:"50%",transform:"translateY(-50%)",
+                zIndex:200,width:16,height:48,background:"var(--panel2)",
+                border:"1.5px solid var(--border)",borderLeft:chartsHidden?"1.5px solid var(--border)":"none",
+                borderRadius:chartsHidden?"0 6px 6px 0":"0 6px 6px 0",
+                cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
+                color:"var(--text-muted)",padding:0,transition:"left 0.18s"}}>
+              <Icon name={chartsHidden?"chevR":"chevL"} size={11}/>
+            </button>
 
-            {/* Map */}
+            {/* Map — uses MapSlot to position the persistent mapDivRef */}
             <div ref={dashRef} style={{flex:1,position:"relative",overflow:"hidden"}}>
-              <MapPanel {...mapProps} isDark={isDark}/>
+              <MapSlot mapProps={mapProps} isDark={isDark}/>
               {/* Coordinate display */}
               <div style={{position:"absolute",bottom:26,left:0,right:0,height:22,
                 background:isDark?"rgba(15,25,35,0.88)":"rgba(255,255,255,0.88)",
@@ -2120,6 +2309,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
         <ExportModal
           dashboardRef={dashRef}
           mapDivRef={mapDivRef}
+          editorRef={editorBodyRef}
           projectTitle={projectTitle}
           onClose={()=>setExportOpen(false)}
         />

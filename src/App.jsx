@@ -1,47 +1,47 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 
-/* ═══════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════
    CDN
-═══════════════════════════════════════════════════════════ */
+═══════════════════════════════════════════ */
 const CDN = {
-  leaflet_css:  "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css",
-  leaflet_js:   "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js",
-  leaflet_draw_css: "https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css",
-  leaflet_draw: "https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js",
-  papaparse:    "https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js",
-  chartjs:      "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js",
-  shpjs:        "https://cdn.jsdelivr.net/npm/shpjs@4.0.4/dist/shp.js",
-  html2canvas:  "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
-  jspdf:        "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+  leaflet_css: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css",
+  leaflet_js:  "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js",
+  papaparse:   "https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js",
+  chartjs:     "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js",
+  shpjs:       "https://cdn.jsdelivr.net/npm/shpjs@4.0.4/dist/shp.js",
+  html2canvas: "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
+  jspdf:       "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
 };
 
-/* ═══════════════════════════════════════════════════════════
-   THEME
-═══════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════
+   TRINITY METALS THEME
+═══════════════════════════════════════════ */
 const THEMES = {
   dark: {
-    "--bg":"#0e0e0c","--panel":"#161614","--panel2":"#1c1c1a","--panel3":"#222220",
-    "--border":"#2a2a28","--text":"#d4d2ca","--text-muted":"#888780",
-    "--accent":"#E8B84B","--accent2":"#c49a35","--hover":"rgba(232,184,75,0.07)",
-    "--danger":"#e05252","--success":"#4ecdc4","--shadow":"rgba(0,0,0,0.65)",
+    "--bg":"#0f1923","--panel":"#162030","--panel2":"#1c2a3d","--panel3":"#223247",
+    "--border":"#2a3d55","--text":"#e8e4d8","--text-muted":"#7a8fa8",
+    "--accent":"#C8922A","--accent2":"#a87420","--accent-soft":"rgba(200,146,42,0.12)",
+    "--hover":"rgba(200,146,42,0.08)","--danger":"#e05252","--success":"#4ecdc4",
+    "--shadow":"rgba(0,0,0,0.7)","--navy":"#1A2B4A",
   },
   light: {
-    "--bg":"#eeeae2","--panel":"#ffffff","--panel2":"#f5f3ee","--panel3":"#ebe8e0",
-    "--border":"#dedad2","--text":"#2c2b28","--text-muted":"#7a7870",
-    "--accent":"#b8861a","--accent2":"#9a6e10","--hover":"rgba(184,134,26,0.08)",
-    "--danger":"#c0392b","--success":"#27ae60","--shadow":"rgba(0,0,0,0.14)",
+    "--bg":"#f0ede6","--panel":"#ffffff","--panel2":"#f7f5f0","--panel3":"#edeae3",
+    "--border":"#d8d3c8","--text":"#1A2B4A","--text-muted":"#5a6e85",
+    "--accent":"#C8922A","--accent2":"#a87420","--accent-soft":"rgba(200,146,42,0.10)",
+    "--hover":"rgba(200,146,42,0.07)","--danger":"#c0392b","--success":"#27ae60",
+    "--shadow":"rgba(26,43,74,0.15)","--navy":"#1A2B4A",
   },
 };
 
-/* ═══════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════
    CONSTANTS
-═══════════════════════════════════════════════════════════ */
-const PALETTE = [
-  "#E8B84B","#4ECDC4","#FF6B6B","#45B7D1","#96CEB4","#F7A35C",
-  "#8085E9","#F15C80","#2ECC71","#E74C3C","#3498DB","#9B59B6",
-  "#1ABC9C","#E67E22","#BDC3C7","#E91E63","#00BCD4","#8BC34A",
+═══════════════════════════════════════════ */
+const CHART_PALETTE = [
+  "#C8922A","#1A2B4A","#2E86AB","#E84855","#3BB273","#7B2D8B","#F4A261",
+  "#264653","#E9C46A","#E76F51","#06D6A0","#118AB2","#FFB703","#8338EC",
+  "#FB5607","#3A86FF","#FFBE0B","#FF006E","#8AC926","#6A4C93",
 ];
-const SHAPES = ["circle","square","triangle","diamond","star","cross","hexagon"];
+const POINT_SHAPES = ["circle","square","triangle","diamond","star","cross","hexagon"];
 const BASEMAPS = {
   "Satellite":   "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
   "Hybrid":      "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
@@ -50,442 +50,1104 @@ const BASEMAPS = {
   "Dark":        "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
   "Light":       "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
 };
-const DB_NAME = "geocore_v4";
-const DB_VERSION = 1;
+const RWANDA = { center:[-1.9403,29.8739], zoom:9 };
+const DB_NAME = "geocore_v7";
 
-/* ═══════════════════════════════════════════════════════════
-   INDEXEDDB HELPERS
-═══════════════════════════════════════════════════════════ */
-function openDB() {
-  return new Promise((res, rej) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = e => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains("projects")) {
-        db.createObjectStore("projects", { keyPath: "id" });
-      }
-    };
-    req.onsuccess = e => res(e.target.result);
-    req.onerror   = e => rej(e.target.error);
-  });
-}
-async function dbGetAll() {
-  const db = await openDB();
-  return new Promise((res, rej) => {
-    const tx  = db.transaction("projects", "readonly");
-    const req = tx.objectStore("projects").getAll();
-    req.onsuccess = e => res(e.target.result);
-    req.onerror   = e => rej(e.target.error);
-  });
-}
-async function dbPut(obj) {
-  const db = await openDB();
-  return new Promise((res, rej) => {
-    const tx  = db.transaction("projects", "readwrite");
-    const req = tx.objectStore("projects").put(obj);
-    req.onsuccess = e => res(e.target.result);
-    req.onerror   = e => rej(e.target.error);
-  });
-}
-async function dbDelete(id) {
-  const db = await openDB();
-  return new Promise((res, rej) => {
-    const tx  = db.transaction("projects", "readwrite");
-    const req = tx.objectStore("projects").delete(id);
-    req.onsuccess = e => res(e.target.result);
-    req.onerror   = e => rej(e.target.error);
-  });
+/* Dashboard layout templates */
+const LAYOUT_TEMPLATES = {
+  classic: {
+    label:"Classic",
+    desc:"Sidebar + full map",
+    icon:"▤",
+    areas:`"sidebar map"`,
+    cols:"360px 1fr",
+    rows:"1fr",
+  },
+  dual: {
+    label:"Dual Panel",
+    desc:"Charts · Map · Charts",
+    icon:"▥",
+    areas:`"left map right"`,
+    cols:"300px 1fr 300px",
+    rows:"1fr",
+  },
+  grid: {
+    label:"Grid",
+    desc:"2×2 equal panels",
+    icon:"▦",
+    areas:`"tl tr" "bl br"`,
+    cols:"1fr 1fr",
+    rows:"1fr 1fr",
+  },
+  focus: {
+    label:"Focus",
+    desc:"Large map + bottom charts",
+    icon:"▧",
+    areas:`"map map map" "c1 c2 c3"`,
+    cols:"1fr 1fr 1fr",
+    rows:"1fr 280px",
+  },
+};
+
+/* ═══════════════════════════════════════════
+   GEOMETRY HELPERS
+═══════════════════════════════════════════ */
+function detectGeomType(geojson) {
+  const f = geojson?.features?.find(f => f.geometry?.type);
+  if (!f) return "Point";
+  const t = f.geometry.type;
+  if (t.includes("Point"))   return "Point";
+  if (t.includes("Line"))    return "Line";
+  if (t.includes("Polygon")) return "Polygon";
+  return "Point";
 }
 
-/* ═══════════════════════════════════════════════════════════
-   SVG ICON MAKER (map markers)
-═══════════════════════════════════════════════════════════ */
-function makeIconSVG(shape, color, size = 16) {
-  const r = size / 2;
-  let inner = "";
-  switch (shape) {
-    case "square":
-      inner = `<rect x="1" y="1" width="${size-2}" height="${size-2}" rx="2" fill="${color}" stroke="#111" stroke-width="1"/>`;
-      break;
-    case "triangle":
-      inner = `<polygon points="${r},1 ${size-1},${size-1} 1,${size-1}" fill="${color}" stroke="#111" stroke-width="1"/>`;
-      break;
-    case "diamond":
-      inner = `<polygon points="${r},1 ${size-1},${r} ${r},${size-1} 1,${r}" fill="${color}" stroke="#111" stroke-width="1"/>`;
-      break;
-    case "star": {
-      const pts = Array.from({length:10},(_,i)=>{
-        const a=(i*Math.PI)/5-Math.PI/2, rad=i%2===0?r-1:r*0.42;
-        return `${r+rad*Math.cos(a)},${r+rad*Math.sin(a)}`;
-      });
-      inner = `<polygon points="${pts.join(" ")}" fill="${color}" stroke="#111" stroke-width="0.8"/>`;
-      break;
-    }
-    case "cross":
-      inner = `<line x1="${r}" y1="2" x2="${r}" y2="${size-2}" stroke="${color}" stroke-width="3.5" stroke-linecap="round"/>
-               <line x1="2" y1="${r}" x2="${size-2}" y2="${r}" stroke="${color}" stroke-width="3.5" stroke-linecap="round"/>`;
-      break;
-    case "hexagon": {
-      const hp = Array.from({length:6},(_,i)=>{
-        const a=(Math.PI/3)*i-Math.PI/6;
-        return `${r+(r-1.5)*Math.cos(a)},${r+(r-1.5)*Math.sin(a)}`;
-      });
-      inner = `<polygon points="${hp.join(" ")}" fill="${color}" stroke="#111" stroke-width="1"/>`;
-      break;
-    }
-    default:
-      inner = `<circle cx="${r}" cy="${r}" r="${r-1}" fill="${color}" stroke="#111" stroke-width="1"/>`;
+function ringAreaM2(coords) {
+  const R = 6371008.8; let area = 0; const n = coords.length;
+  for (let i = 0; i < n; i++) {
+    const [lng1,lat1]=coords[i], [lng2,lat2]=coords[(i+1)%n];
+    const dLng=(lng2-lng1)*Math.PI/180, phi1=lat1*Math.PI/180, phi2=lat2*Math.PI/180;
+    area += dLng*(2+Math.sin(phi1)+Math.sin(phi2));
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${inner}</svg>`;
+  return Math.abs(area*R*R/2);
+}
+function featureAreaM2(f) {
+  const t=f.geometry?.type, c=f.geometry?.coordinates;
+  if(!t||!c) return 0;
+  if(t==="Polygon")      return ringAreaM2(c[0]);
+  if(t==="MultiPolygon") return c.reduce((s,p)=>s+ringAreaM2(p[0]),0);
+  return 0;
 }
 
-/* ═══════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════
+   INDEXEDDB
+═══════════════════════════════════════════ */
+function openDB() {
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open(DB_NAME,1);
+    req.onupgradeneeded=e=>{
+      const db=e.target.result;
+      if(!db.objectStoreNames.contains("projects"))
+        db.createObjectStore("projects",{keyPath:"id"});
+    };
+    req.onsuccess=e=>res(e.target.result);
+    req.onerror=e=>rej(e.target.error);
+  });
+}
+const dbOp=(mode,fn)=>openDB().then(db=>new Promise((res,rej)=>{
+  const tx=db.transaction("projects",mode), req=fn(tx.objectStore("projects"));
+  req.onsuccess=e=>res(e.target.result); req.onerror=e=>rej(e.target.error);
+}));
+const dbGetAll=()=>dbOp("readonly",s=>s.getAll());
+const dbPut=obj=>dbOp("readwrite",s=>s.put(obj));
+const dbDelete=id=>dbOp("readwrite",s=>s.delete(id));
+
+/* ═══════════════════════════════════════════
    SCRIPT LOADER
-═══════════════════════════════════════════════════════════ */
-const _loaded = new Set();
-function loadScript(src) {
-  if (_loaded.has(src)) return Promise.resolve();
-  const existing = document.querySelector(`script[src="${src}"]`);
-  if (existing) { _loaded.add(src); return Promise.resolve(); }
-  return new Promise((res, rej) => {
-    const s = document.createElement("script");
-    s.src = src;
-    s.onload = () => { _loaded.add(src); res(); };
-    s.onerror = rej;
+═══════════════════════════════════════════ */
+const _loaded=new Set();
+function loadScript(src){
+  if(_loaded.has(src)) return Promise.resolve();
+  if(document.querySelector(`script[src="${src}"]`)){_loaded.add(src);return Promise.resolve();}
+  return new Promise((res,rej)=>{
+    const s=document.createElement("script"); s.src=src;
+    s.onload=()=>{_loaded.add(src);res();}; s.onerror=rej;
     document.head.appendChild(s);
   });
 }
-function loadStyle(href) {
-  if (!document.querySelector(`link[href="${href}"]`)) {
-    const l = document.createElement("link");
-    l.rel = "stylesheet"; l.href = href;
+function loadStyle(href){
+  if(!document.querySelector(`link[href="${href}"]`)){
+    const l=document.createElement("link"); l.rel="stylesheet"; l.href=href;
     document.head.appendChild(l);
   }
 }
 
-/* ═══════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════
    ICONS
-═══════════════════════════════════════════════════════════ */
-const IP = {
-  upload:   <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></>,
-  layers:   <><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>,
-  chart:    <><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>,
-  map:      <><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></>,
-  x:        <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
-  plus:     <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
-  image:    <><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>,
-  trash:    <><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></>,
-  eye:      <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>,
-  eyeOff:   <><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></>,
-  chevD:    <><polyline points="6 9 12 15 18 9"/></>,
-  chevU:    <><polyline points="18 15 12 9 6 15"/></>,
-  db:       <><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></>,
-  zIn:      <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></>,
-  zOut:     <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></>,
-  home:     <><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></>,
-  sun:      <><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></>,
-  moon:     <><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></>,
-  palette:  <><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c1.1 0 2-.9 2-2v-.5c0-.55.45-1 1-1h1c2.76 0 5-2.24 5-5 0-5.52-4.48-10-10-10z"/></>,
-  save:     <><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>,
-  export:   <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>,
-  folder:   <><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></>,
-  ruler:    <><line x1="4" y1="21" x2="21" y2="4"/><line x1="4" y1="21" x2="9" y2="16"/><line x1="21" y1="4" x2="16" y2="9"/><line x1="14" y1="3" x2="3" y2="14"/></>,
-  filter:   <><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></>,
-  label:    <><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></>,
-  edit:     <><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>,
-  back:     <><polyline points="15 18 9 12 15 6"/></>,
-  settings: <><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 1.95 3.64l-1.36.37a8 8 0 0 0-1.57-2.93l.98-.97zm-14.14 0l.98.97a8 8 0 0 0-1.57 2.93l-1.36-.37A10 10 0 0 1 4.93 4.93zM4.93 19.07l.97-.98a8 8 0 0 0 2.93 1.57l-.37 1.36a10 10 0 0 1-3.53-1.95zm14.14 0a10 10 0 0 1-3.53 1.95l-.37-1.36a8 8 0 0 0 2.93-1.57l.97.98z"/></>,
-  check:    <><polyline points="20 6 9 17 4 12"/></>,
+═══════════════════════════════════════════ */
+const IP={
+  upload: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></>,
+  layers: <><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>,
+  chart:  <><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>,
+  map:    <><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></>,
+  x:      <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
+  plus:   <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
+  image:  <><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>,
+  trash:  <><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></>,
+  eye:    <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>,
+  eyeOff: <><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></>,
+  chevD:  <><polyline points="6 9 12 15 18 9"/></>,
+  chevU:  <><polyline points="18 15 12 9 6 15"/></>,
+  chevL:  <><polyline points="15 18 9 12 15 6"/></>,
+  chevR:  <><polyline points="9 18 15 12 9 6"/></>,
+  db:     <><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></>,
+  zIn:    <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></>,
+  zOut:   <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></>,
+  home:   <><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></>,
+  sun:    <><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></>,
+  moon:   <><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></>,
+  palette:<><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c1.1 0 2-.9 2-2v-.5c0-.55.45-1 1-1h1c2.76 0 5-2.24 5-5 0-5.52-4.48-10-10-10z"/></>,
+  export: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>,
+  folder: <><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></>,
+  ruler:  <><line x1="4" y1="21" x2="21" y2="4"/><line x1="4" y1="21" x2="9" y2="16"/><line x1="21" y1="4" x2="16" y2="9"/><line x1="14" y1="3" x2="3" y2="14"/></>,
+  filter: <><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></>,
+  label:  <><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></>,
+  back:   <><polyline points="15 18 9 12 15 6"/></>,
+  check:  <><polyline points="20 6 9 17 4 12"/></>,
+  search: <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>,
+  area:   <><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/></>,
+  opacity:<><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z"/></>,
+  pin:    <><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></>,
+  layout: <><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/></>,
+  view:   <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>,
+  edit2:  <><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>,
+  legend: <><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></>,
 };
-const Icon = ({ name, size=16, color="currentColor" }) => (
+const Icon=({name,size=16,color="currentColor"})=>(
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
     stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     {IP[name]}
   </svg>
 );
 
-/* ═══════════════════════════════════════════════════════════
-   CHART PANEL
-═══════════════════════════════════════════════════════════ */
-function ChartPanel({ data, field, chartType, colorMap, isDark, height=240 }) {
-  const canvasRef = useRef(null);
-  const chartRef  = useRef(null);
+/* ═══════════════════════════════════════════
+   SHARED PRIMITIVES
+═══════════════════════════════════════════ */
+const ss=(extra={})=>({
+  background:"var(--panel2)",border:"1.5px solid var(--border)",color:"var(--text)",
+  borderRadius:8,padding:"7px 10px",fontSize:12,fontFamily:"Inter,DM Sans,sans-serif",
+  cursor:"pointer",outline:"none",...extra,
+});
 
-  useEffect(() => {
-    if (!canvasRef.current || !field || chartType === "table") return;
-    if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
-    if (!data?.length) return;
+function Btn({onClick,active,children,title,disabled,style={}}){
+  return(
+    <button onClick={onClick} title={title} disabled={disabled}
+      style={{display:"flex",alignItems:"center",gap:6,padding:"0 12px",height:36,
+        background:active?"var(--accent)":"var(--panel)",
+        border:`1.5px solid ${active?"var(--accent)":"var(--border)"}`,
+        borderRadius:10,cursor:disabled?"not-allowed":"pointer",
+        color:active?"#fff":"var(--text-muted)",fontSize:12,fontWeight:600,
+        fontFamily:"Inter,DM Sans,sans-serif",whiteSpace:"nowrap",
+        transition:"all 0.15s",opacity:disabled?0.5:1,...style}}>
+      {children}
+    </button>
+  );
+}
 
-    const counts = {};
-    data.forEach(f => { const v=String(f.properties?.[field]??"N/A"); counts[v]=(counts[v]||0)+1; });
-    let labels = Object.keys(counts).sort((a,b)=>counts[b]-counts[a]).slice(0,20);
-    const colors = labels.map(l => colorMap[l]||"#888");
-    const tc = isDark?"#c9c8c0":"#3d3d3a";
-    const gc = isDark?"#2a2a28":"#e8e6e0";
-
-    chartRef.current = new window.Chart(canvasRef.current.getContext("2d"),{
-      type: chartType==="area"?"line":chartType==="donut"?"doughnut":chartType,
-      data:{
-        labels,
-        datasets:[{
-          data: labels.map(l=>counts[l]),
-          backgroundColor: chartType==="line"?"transparent":colors.map(c=>c+"CC"),
-          borderColor: colors, borderWidth: chartType==="line"?2:1,
-          tension:0.4, fill:chartType==="area",
-          pointRadius:(chartType==="line"||chartType==="area")?4:0,
-          pointBackgroundColor:colors,
-        }],
-      },
-      options:{
-        responsive:true, maintainAspectRatio:false, animation:false,
-        plugins:{
-          legend:{ display:chartType==="pie"||chartType==="donut", position:"bottom",
-            labels:{color:tc,font:{size:10},padding:8,boxWidth:12} },
-          tooltip:{ backgroundColor:isDark?"#1c1c1a":"#fff",
-            titleColor:tc, bodyColor:tc,
-            borderColor:isDark?"#3a3a38":"#d8d6d0", borderWidth:1 },
-        },
-        scales:(chartType==="pie"||chartType==="donut")?{}:{
-          x:{ ticks:{color:tc,font:{size:9},maxRotation:40}, grid:{color:gc} },
-          y:{ ticks:{color:tc,font:{size:9}}, grid:{color:gc}, beginAtZero:true },
-        },
-      },
-    });
-    return () => { if(chartRef.current){chartRef.current.destroy();chartRef.current=null;} };
-  },[data,field,chartType,colorMap,isDark]);
-
-  if (chartType==="table") return null;
-  return (
-    <div style={{height,position:"relative",minHeight:height}}>
-      {(!data?.length&&field) && (
-        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",
-          justifyContent:"center",fontSize:11,color:"var(--text-muted)",opacity:0.5}}>
-          No visible features
+function Modal({title,subtitle,onClose,width=420,children}){
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:1000,display:"flex",alignItems:"center",
+      justifyContent:"center",background:"rgba(10,16,28,0.7)",backdropFilter:"blur(4px)"}}
+      onClick={onClose}>
+      <div style={{background:"var(--panel)",border:"1.5px solid var(--border)",borderRadius:16,
+        width,maxHeight:"82vh",display:"flex",flexDirection:"column",
+        boxShadow:"0 32px 80px var(--shadow)"}} onClick={e=>e.stopPropagation()}>
+        <div style={{padding:"14px 18px",borderBottom:"1px solid var(--border)",
+          display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+          <div>
+            <div style={{fontSize:13,fontWeight:700,letterSpacing:"0.05em",color:"var(--accent)",
+              fontFamily:"Inter,DM Sans,sans-serif"}}>{title}</div>
+            {subtitle&&<div style={{fontSize:10,color:"var(--text-muted)",marginTop:2,
+              fontFamily:"Inter,DM Sans,sans-serif"}}>{subtitle}</div>}
+          </div>
+          <button onClick={onClose}
+            style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",padding:4}}>
+            <Icon name="x" size={16}/>
+          </button>
         </div>
-      )}
-      <canvas ref={canvasRef} style={{width:"100%",height:"100%"}}/>
+        {children}
+      </div>
     </div>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════
-   TABLE PANEL
-═══════════════════════════════════════════════════════════ */
-function TablePanel({ data, field, colorMap }) {
-  if (!data?.length||!field) return null;
-  const counts={};
-  data.forEach(f=>{const v=String(f.properties?.[field]??"N/A");counts[v]=(counts[v]||0)+1;});
-  const rows=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,60);
-  const total=data.length||1;
-  return (
-    <div style={{overflowY:"auto",flex:1,fontSize:12}}>
-      <table style={{width:"100%",borderCollapse:"collapse"}}>
+function EmptyMsg({children}){
+  return(
+    <div style={{padding:"32px 24px",textAlign:"center",fontSize:12,
+      color:"var(--text-muted)",fontFamily:"Inter,DM Sans,sans-serif",opacity:0.6}}>
+      {children}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   LEGEND SWATCH
+═══════════════════════════════════════════ */
+function legendSwatch(geomType,color,shape="circle",w=22,h=14){
+  if(geomType==="Polygon")
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect x="1" y="1" width="${w-2}" height="${h-2}" rx="2" fill="${color}" stroke="${color}" stroke-width="1"/></svg>`;
+  if(geomType==="Line")
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><line x1="2" y1="${h/2}" x2="${w-2}" y2="${h/2}" stroke="${color}" stroke-width="2.5" stroke-linecap="round"/></svg>`;
+  const r=Math.min(w,h),cx=r/2;
+  let inner="";
+  switch(shape){
+    case "square":   inner=`<rect x="2" y="2" width="${r-4}" height="${r-4}" rx="1" fill="${color}"/>`;break;
+    case "triangle": inner=`<polygon points="${cx},2 ${r-2},${r-2} 2,${r-2}" fill="${color}"/>`;break;
+    case "diamond":  inner=`<polygon points="${cx},2 ${r-2},${cx} ${cx},${r-2} 2,${cx}" fill="${color}"/>`;break;
+    case "star":{const pts=Array.from({length:10},(_,i)=>{const a=(i*Math.PI)/5-Math.PI/2,rd=i%2===0?cx-2:cx*0.45;return`${cx+rd*Math.cos(a)},${cx+rd*Math.sin(a)}`;});inner=`<polygon points="${pts.join(" ")}" fill="${color}"/>`;break;}
+    case "cross":    inner=`<line x1="${cx}" y1="2" x2="${cx}" y2="${r-2}" stroke="${color}" stroke-width="2.5" stroke-linecap="round"/><line x1="2" y1="${cx}" x2="${r-2}" y2="${cx}" stroke="${color}" stroke-width="2.5" stroke-linecap="round"/>`;break;
+    case "hexagon":{const hp=Array.from({length:6},(_,i)=>{const a=(Math.PI/3)*i-Math.PI/6;return`${cx+(cx-2)*Math.cos(a)},${cx+(cx-2)*Math.sin(a)}`;});inner=`<polygon points="${hp.join(" ")}" fill="${color}"/>`;break;}
+    default: inner=`<circle cx="${cx}" cy="${cx}" r="${cx-1.5}" fill="${color}"/>`;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${r}" height="${r}" viewBox="0 0 ${r} ${r}">${inner}</svg>`;
+}
+
+function makePointSVG(shape,color,size=16){
+  const r=size/2;let inner="";
+  switch(shape){
+    case "square":   inner=`<rect x="1" y="1" width="${size-2}" height="${size-2}" rx="2" fill="${color}" stroke="#111" stroke-width="1"/>`;break;
+    case "triangle": inner=`<polygon points="${r},1 ${size-1},${size-1} 1,${size-1}" fill="${color}" stroke="#111" stroke-width="1"/>`;break;
+    case "diamond":  inner=`<polygon points="${r},1 ${size-1},${r} ${r},${size-1} 1,${r}" fill="${color}" stroke="#111" stroke-width="1"/>`;break;
+    case "star":{const pts=Array.from({length:10},(_,i)=>{const a=(i*Math.PI)/5-Math.PI/2,rd=i%2===0?r-1:r*0.42;return`${r+rd*Math.cos(a)},${r+rd*Math.sin(a)}`;});inner=`<polygon points="${pts.join(" ")}" fill="${color}" stroke="#111" stroke-width="0.8"/>`;break;}
+    case "cross":    inner=`<line x1="${r}" y1="2" x2="${r}" y2="${size-2}" stroke="${color}" stroke-width="3.5" stroke-linecap="round"/><line x1="2" y1="${r}" x2="${size-2}" y2="${r}" stroke="${color}" stroke-width="3.5" stroke-linecap="round"/>`;break;
+    case "hexagon":{const hp=Array.from({length:6},(_,i)=>{const a=(Math.PI/3)*i-Math.PI/6;return`${r+(r-1.5)*Math.cos(a)},${r+(r-1.5)*Math.sin(a)}`;});inner=`<polygon points="${hp.join(" ")}" fill="${color}" stroke="#111" stroke-width="1"/>`;break;}
+    default: inner=`<circle cx="${r}" cy="${r}" r="${r-1}" fill="${color}" stroke="#111" stroke-width="1"/>`;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${inner}</svg>`;
+}
+
+/* ═══════════════════════════════════════════
+   CHART DATA BUILDER
+   Derives colorMap from the layer itself —
+   never depends on external shared state.
+═══════════════════════════════════════════ */
+function buildColorMap(features,field){
+  if(!features?.length||!field) return {};
+  const vals=[...new Set(features.map(f=>String(f.properties?.[field]??"N/A")))];
+  const map={};
+  vals.forEach((v,i)=>{map[v]=CHART_PALETTE[i%CHART_PALETTE.length];});
+  return map;
+}
+
+function buildChartData(features,field,geomType,chartMode,colorMap){
+  if(!features?.length||!field) return null;
+  const totals={};
+  if(chartMode==="area"&&geomType==="Polygon"){
+    const areaKey=features[0]?.properties
+      ?Object.keys(features[0].properties).find(k=>/shape.?area|area_ha|area_km|area_m2|area$/i.test(k))
+      :null;
+    features.forEach(f=>{
+      const v=String(f.properties?.[field]??"N/A");
+      const a=areaKey&&f.properties[areaKey]!=null?+f.properties[areaKey]||0:featureAreaM2(f);
+      totals[v]=(totals[v]||0)+a;
+    });
+  } else {
+    features.forEach(f=>{
+      const v=String(f.properties?.[field]??"N/A");
+      totals[v]=(totals[v]||0)+1;
+    });
+  }
+  let labels=Object.keys(totals).sort((a,b)=>totals[b]-totals[a]).slice(0,25);
+  const raw=labels.map(l=>totals[l]);
+  const displaySum=raw.reduce((s,v)=>s+v,0);
+  let pcts=raw.map(v=>displaySum>0?+((v/displaySum)*100).toFixed(2):0);
+  if(pcts.length>0){const diff=100-pcts.reduce((s,v)=>s+v,0);pcts[pcts.length-1]=+(pcts[pcts.length-1]+diff).toFixed(2);}
+  const unit=chartMode==="area"
+    ?(raw.some(v=>v>=1e6)?"km²":raw.some(v=>v>=1e4)?"ha":"m²")
+    :"features";
+  const dv=chartMode==="area"
+    ?raw.map(v=>unit==="km²"?+(v/1e6).toFixed(3):unit==="ha"?+(v/1e4).toFixed(2):+v.toFixed(0))
+    :raw;
+  const colors=labels.map(l=>colorMap[l]||CHART_PALETTE[labels.indexOf(l)%CHART_PALETTE.length]);
+  return{labels,values:dv,raw,colors,unit,percentages:pcts};
+}
+
+/* ═══════════════════════════════════════════
+   CHART INNER  (key-forced remount = no bug)
+═══════════════════════════════════════════ */
+function ChartInner({built,chartType,isDark}){
+  const ref=useRef(null), inst=useRef(null);
+  useEffect(()=>{
+    if(!ref.current||!built) return;
+    if(inst.current){inst.current.destroy();inst.current=null;}
+    const {labels,values,colors,unit,percentages}=built;
+    const tc=isDark?"#c8c4b8":"#1A2B4A", gc=isDark?"#1e2e42":"#e8e3d8";
+    const isPolar=chartType==="pie"||chartType==="donut";
+    inst.current=new window.Chart(ref.current.getContext("2d"),{
+      type:chartType==="area"?"line":chartType==="donut"?"doughnut":chartType,
+      data:{labels,datasets:[{
+        data:values,
+        backgroundColor:isPolar||chartType==="bar"?colors:chartType==="line"?"transparent":colors,
+        borderColor:colors,
+        borderWidth:isPolar?2:chartType==="bar"?0:2,
+        tension:0.4,fill:chartType==="area",
+        pointRadius:(chartType==="line"||chartType==="area")?5:0,
+        pointBackgroundColor:colors,pointBorderColor:"#fff",pointBorderWidth:1.5,
+        hoverOffset:isPolar?8:0,
+      }]},
+      options:{
+        responsive:true,maintainAspectRatio:false,animation:{duration:250},layout:{padding:6},
+        plugins:{
+          legend:{display:isPolar,position:"bottom",labels:{
+            color:tc,font:{size:10,family:"Inter,DM Sans,sans-serif"},
+            padding:8,boxWidth:12,usePointStyle:true,
+            generateLabels:ch=>{
+              const ds=ch.data.datasets[0];
+              return ch.data.labels.map((lbl,i)=>({
+                text:`${lbl}  ${built.percentages[i]}%`,
+                fillStyle:ds.backgroundColor[i],
+                strokeStyle:ds.backgroundColor[i],
+                lineWidth:0,hidden:false,index:i,
+              }));
+            },
+          }},
+          tooltip:{backgroundColor:isDark?"#162030":"#fff",titleColor:tc,bodyColor:isDark?"#8fa5bc":"#5a6e85",
+            borderColor:isDark?"#2a3d55":"#d8d3c8",borderWidth:1,padding:10,cornerRadius:8,
+            callbacks:{label:ctx=>{const pct=built.percentages[ctx.dataIndex];const val=ctx.parsed.y??ctx.parsed;return`  ${val.toLocaleString()} ${unit}  (${pct}%)`;}},
+          },
+        },
+        scales:isPolar?{}:{
+          x:{ticks:{color:tc,font:{size:9,family:"Inter,DM Sans,sans-serif"},maxRotation:40},grid:{color:gc}},
+          y:{ticks:{color:tc,font:{size:9,family:"Inter,DM Sans,sans-serif"}},grid:{color:gc},beginAtZero:true,
+             title:{display:!!unit,text:unit,color:isDark?"#7a8fa8":"#5a6e85",font:{size:9}}},
+        },
+      },
+    });
+    return()=>{if(inst.current){inst.current.destroy();inst.current=null;}};
+  },[built,chartType,isDark]);
+  return <canvas ref={ref} style={{width:"100%",height:"100%"}}/>;
+}
+
+/* ═══════════════════════════════════════════
+   SELF-CONTAINED CHART WIDGET
+   Each widget holds its own layer ref, field,
+   chartType, chartMode — fully independent.
+   colorMap derived from layer data on the fly.
+═══════════════════════════════════════════ */
+function ChartWidget({layers,visibleFeatsByLayer,config,onConfigChange,isDark,compact=false}){
+  const {layerId,field,chartType,chartMode}=config;
+
+  // Find the layer this widget targets
+  const layer=useMemo(()=>layers.find(l=>String(l.id)===String(layerId))||layers[0],[layers,layerId]);
+  const geomType=useMemo(()=>detectGeomType(layer?.geojson),[layer]);
+  const fields=useMemo(()=>Object.keys(layer?.geojson?.features?.[0]?.properties||{}),[layer]);
+
+  // Visible features for THIS layer — not a shared global
+  const visibleFeats=useMemo(()=>visibleFeatsByLayer[String(layer?.id)]||[],[visibleFeatsByLayer,layer]);
+
+  // ColorMap derived directly from this layer's full data for this field
+  const colorMap=useMemo(()=>buildColorMap(layer?.geojson?.features||[],field),[layer,field]);
+
+  const built=useMemo(()=>buildChartData(visibleFeats,field,geomType,chartMode||"count",colorMap),
+    [visibleFeats,field,geomType,chartMode,colorMap]);
+
+  const chartKey=`${layer?.id}_${field}_${chartType}_${chartMode}_${visibleFeats.length}`;
+  const effectiveMode=chartMode||(geomType==="Polygon"?"area":"count");
+
+  if(compact) return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      {/* Mini config bar */}
+      <div style={{display:"flex",gap:5,padding:"8px 10px",borderBottom:"1px solid var(--border)",
+        flexShrink:0,flexWrap:"wrap",alignItems:"center"}}>
+        <select value={String(layer?.id||"")} onChange={e=>onConfigChange({layerId:e.target.value})}
+          style={{...ss(),flex:1,minWidth:60,fontSize:10,padding:"4px 6px"}}>
+          {layers.map(l=><option key={l.id} value={String(l.id)}>{l.name}</option>)}
+        </select>
+        <select value={field||""} onChange={e=>onConfigChange({field:e.target.value})}
+          style={{...ss(),flex:1,minWidth:60,fontSize:10,padding:"4px 6px"}}>
+          <option value="">— field —</option>
+          {fields.map(f=><option key={f} value={f}>{f}</option>)}
+        </select>
+        <select value={chartType||"bar"} onChange={e=>onConfigChange({chartType:e.target.value})}
+          style={{...ss(),width:54,fontSize:10,padding:"4px 4px"}}>
+          {["bar","pie","donut","line","area","table"].map(t=><option key={t} value={t}>{t}</option>)}
+        </select>
+        {geomType==="Polygon"&&(
+          <button onClick={()=>onConfigChange({chartMode:effectiveMode==="area"?"count":"area"})}
+            style={{...ss(),fontSize:9,padding:"4px 7px",fontWeight:700,
+              background:effectiveMode==="area"?"var(--accent)":"var(--panel2)",
+              border:`1.5px solid ${effectiveMode==="area"?"var(--accent)":"var(--border)"}`,
+              color:effectiveMode==="area"?"#fff":"var(--text-muted)"}}>
+            {effectiveMode==="area"?"Area":"Count"}
+          </button>
+        )}
+      </div>
+      {/* Chart */}
+      <div style={{flex:1,minHeight:0,padding:chartType==="table"?0:"8px",overflow:"hidden"}}>
+        {chartType==="table"
+          ?<TableWidget built={built}/>
+          :<div style={{height:"100%"}}>
+            {built?<ChartInner key={chartKey} built={built} chartType={chartType||"bar"} isDark={isDark}/>
+              :<EmptyMsg>{field?"No visible features":"Select a field"}</EmptyMsg>}
+          </div>
+        }
+      </div>
+    </div>
+  );
+
+  // Full sidebar version
+  return(
+    <div style={{borderBottom:"1px solid var(--border)",padding:"12px 14px",
+      background:"var(--panel)"}}>
+      <div style={{display:"flex",gap:6,marginBottom:10,alignItems:"center",flexWrap:"wrap"}}>
+        <select value={String(layer?.id||"")} onChange={e=>onConfigChange({layerId:e.target.value})}
+          style={{...ss(),flex:1,minWidth:80}}>
+          {layers.map(l=><option key={l.id} value={String(l.id)}>{l.name}</option>)}
+        </select>
+        <select value={field||""} onChange={e=>onConfigChange({field:e.target.value})}
+          style={{...ss(),flex:1,minWidth:80}}>
+          <option value="">— field —</option>
+          {fields.map(f=><option key={f} value={f}>{f}</option>)}
+        </select>
+        <select value={chartType||"bar"} onChange={e=>onConfigChange({chartType:e.target.value})}
+          style={{...ss(),width:68}}>
+          {["bar","pie","donut","line","area","table"].map(t=><option key={t} value={t}>{t}</option>)}
+        </select>
+        {geomType==="Polygon"&&(
+          <button onClick={()=>onConfigChange({chartMode:effectiveMode==="area"?"count":"area"})}
+            style={{...ss(),fontWeight:700,fontSize:10,
+              background:effectiveMode==="area"?"var(--accent)":"var(--panel2)",
+              border:`1.5px solid ${effectiveMode==="area"?"var(--accent)":"var(--border)"}`,
+              color:effectiveMode==="area"?"#fff":"var(--text-muted)"}}>
+            {effectiveMode==="area"?"Area":"Count"}
+          </button>
+        )}
+      </div>
+      <div style={{height:250}}>
+        {chartType==="table"
+          ?<TableWidget built={built}/>
+          :(built
+            ?<ChartInner key={chartKey} built={built} chartType={chartType||"bar"} isDark={isDark}/>
+            :<EmptyMsg>{field?"No visible features":"Select a field"}</EmptyMsg>)
+        }
+      </div>
+    </div>
+  );
+}
+
+function TableWidget({built}){
+  if(!built) return <EmptyMsg>No data</EmptyMsg>;
+  const{labels,values,colors,unit,percentages}=built;
+  return(
+    <div style={{overflowY:"auto",maxHeight:300}}>
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
         <thead>
-          <tr style={{borderBottom:"1px solid var(--border)",position:"sticky",top:0,background:"var(--panel)"}}>
-            {["Value","Count","%",""].map(h=>(
-              <th key={h} style={{padding:"7px 10px",textAlign:h==="Value"?"left":"right",
-                color:"var(--text-muted)",fontWeight:500,fontSize:10}}>{h}</th>
+          <tr style={{borderBottom:"2px solid var(--border)",position:"sticky",top:0,background:"var(--panel)"}}>
+            {["Class",unit==="features"?"Count":unit,"%",""].map(h=>(
+              <th key={h} style={{padding:"6px 10px",textAlign:h==="Class"?"left":"right",
+                color:"var(--text-muted)",fontWeight:600,fontSize:10,
+                fontFamily:"Inter,DM Sans,sans-serif",letterSpacing:"0.05em"}}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map(([val,cnt],i)=>{
-            const pct=((cnt/total)*100).toFixed(1);
-            const col=colorMap[val]||PALETTE[i%PALETTE.length];
-            return (
-              <tr key={val} style={{borderBottom:"1px solid var(--border)"}}
-                onMouseEnter={e=>e.currentTarget.style.background="var(--hover)"}
-                onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                <td style={{padding:"6px 10px",color:"var(--text)",display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{width:9,height:9,borderRadius:"50%",background:col,flexShrink:0,display:"inline-block"}}/>
-                  <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:120}}>{val}</span>
-                </td>
-                <td style={{padding:"6px 10px",textAlign:"right",color:"var(--text)",fontVariantNumeric:"tabular-nums"}}>{cnt}</td>
-                <td style={{padding:"6px 10px",textAlign:"right",color:"var(--text-muted)"}}>{pct}%</td>
-                <td style={{padding:"6px 10px"}}>
-                  <div style={{height:4,borderRadius:3,background:"var(--border)",overflow:"hidden"}}>
-                    <div style={{height:"100%",width:`${pct}%`,background:col,borderRadius:3}}/>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
+          {labels.map((val,i)=>(
+            <tr key={val} style={{borderBottom:"1px solid var(--border)"}}
+              onMouseEnter={e=>e.currentTarget.style.background="var(--hover)"}
+              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              <td style={{padding:"6px 10px",display:"flex",alignItems:"center",gap:8}}>
+                <span style={{width:10,height:10,borderRadius:2,background:colors[i],flexShrink:0,display:"inline-block"}}/>
+                <span style={{color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",
+                  whiteSpace:"nowrap",maxWidth:120,fontFamily:"Inter,DM Sans,sans-serif"}}>{val}</span>
+              </td>
+              <td style={{padding:"6px 10px",textAlign:"right",color:"var(--text)",
+                fontFamily:"monospace",fontVariantNumeric:"tabular-nums"}}>
+                {typeof values[i]==="number"?values[i].toLocaleString(undefined,{maximumFractionDigits:2}):values[i]}
+              </td>
+              <td style={{padding:"6px 10px",textAlign:"right",color:"var(--text-muted)",fontFamily:"monospace"}}>
+                {percentages[i]}%
+              </td>
+              <td style={{padding:"6px 10px",width:50}}>
+                <div style={{height:4,borderRadius:3,background:"var(--border)",overflow:"hidden"}}>
+                  <div style={{height:"100%",width:`${percentages[i]}%`,background:colors[i],borderRadius:3}}/>
+                </div>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════
-   SYMBOL EDITOR MODAL
-═══════════════════════════════════════════════════════════ */
-function SymbolEditor({ colorMap, shapeMap, opacityMap, onColorChange, onShapeChange, onOpacityChange, onClose }) {
-  const cats = Object.keys(colorMap);
-  return (
-    <div style={{position:"fixed",inset:0,zIndex:1000,display:"flex",alignItems:"center",
-      justifyContent:"center",background:"rgba(0,0,0,0.6)"}} onClick={onClose}>
-      <div style={{background:"var(--panel)",border:"1px solid var(--border)",borderRadius:14,
-        width:380,maxHeight:"78vh",display:"flex",flexDirection:"column",
-        boxShadow:"0 24px 64px var(--shadow)"}} onClick={e=>e.stopPropagation()}>
+/* ═══════════════════════════════════════════
+   LEGEND WIDGET  (standalone panel)
+═══════════════════════════════════════════ */
+function LegendWidget({layers,visibleFeatsByLayer,config,onConfigChange}){
+  const {layerId,field}=config;
+  const layer=layers.find(l=>String(l.id)===String(layerId))||layers[0];
+  const geomType=detectGeomType(layer?.geojson);
+  const fields=Object.keys(layer?.geojson?.features?.[0]?.properties||{});
+  const colorMap=useMemo(()=>buildColorMap(layer?.geojson?.features||[],field),[layer,field]);
+  const shapeMap=useMemo(()=>{
+    const vals=Object.keys(colorMap);
+    const m={};vals.forEach((v,i)=>{m[v]=POINT_SHAPES[i%POINT_SHAPES.length];});return m;
+  },[colorMap]);
+  const visibleFeats=visibleFeatsByLayer[String(layer?.id)]||[];
 
-        <div style={{padding:"13px 16px",borderBottom:"1px solid var(--border)",
-          display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <Icon name="palette" size={14} color="var(--accent)"/>
-            <span style={{fontSize:12,fontWeight:700,letterSpacing:"0.08em",color:"var(--text-muted)"}}>SYMBOL EDITOR</span>
-          </div>
-          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)"}}>
-            <Icon name="x" size={16}/>
-          </button>
-        </div>
-
-        {/* Column headers */}
-        <div style={{display:"grid",gridTemplateColumns:"24px 1fr 80px 70px",gap:8,
-          padding:"8px 16px",borderBottom:"1px solid var(--border)",
-          fontSize:10,color:"var(--text-muted)",letterSpacing:"0.08em"}}>
-          <span>CLR</span><span>CATEGORY</span><span>SHAPE</span><span>OPACITY</span>
-        </div>
-
-        <div style={{overflowY:"auto",flex:1}}>
-          {cats.length===0?(
-            <div style={{padding:28,textAlign:"center",fontSize:12,color:"var(--text-muted)"}}>
-              Select a field first to enable symbol editing
-            </div>
-          ):cats.map(cat=>(
-            <div key={cat} style={{display:"grid",gridTemplateColumns:"24px 1fr 80px 70px",
-              gap:8,padding:"9px 16px",borderBottom:"1px solid var(--border)",
-              alignItems:"center"}}>
-              {/* Colour */}
-              <div style={{position:"relative",width:22,height:22,borderRadius:"50%",
-                background:colorMap[cat],border:"2px solid var(--border)",overflow:"hidden",cursor:"pointer"}}>
-                <input type="color" value={colorMap[cat]} onChange={e=>onColorChange(cat,e.target.value)}
-                  style={{opacity:0,position:"absolute",inset:0,width:"100%",height:"100%",cursor:"pointer",padding:0}}/>
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      <div style={{display:"flex",gap:6,padding:"8px 12px",borderBottom:"1px solid var(--border)",flexShrink:0}}>
+        <select value={String(layer?.id||"")} onChange={e=>onConfigChange({layerId:e.target.value})}
+          style={{...ss(),flex:1,fontSize:10,padding:"4px 6px"}}>
+          {layers.map(l=><option key={l.id} value={String(l.id)}>{l.name}</option>)}
+        </select>
+        <select value={field||""} onChange={e=>onConfigChange({field:e.target.value})}
+          style={{...ss(),flex:1,fontSize:10,padding:"4px 6px"}}>
+          <option value="">— field —</option>
+          {fields.map(f=><option key={f} value={f}>{f}</option>)}
+        </select>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"10px 12px"}}>
+        {!field||Object.keys(colorMap).length===0
+          ?<EmptyMsg>Select layer and field</EmptyMsg>
+          :Object.entries(colorMap).map(([val,col])=>{
+            const shape=shapeMap[val]||"circle";
+            const cnt=visibleFeats.filter(f=>String(f.properties?.[field])===val).length;
+            return(
+              <div key={val} style={{display:"flex",alignItems:"center",gap:8,
+                padding:"5px 0",borderBottom:"1px solid var(--border)"}}>
+                <span dangerouslySetInnerHTML={{__html:legendSwatch(geomType,col,shape,22,14)}}
+                  style={{flexShrink:0,display:"flex",alignItems:"center"}}/>
+                <span style={{flex:1,fontSize:12,color:"var(--text)",overflow:"hidden",
+                  textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"Inter,DM Sans,sans-serif"}}>{val}</span>
+                <span style={{fontSize:10,color:"var(--text-muted)",fontFamily:"monospace",flexShrink:0}}>{cnt}</span>
               </div>
-              {/* Name */}
-              <span style={{fontSize:11,color:"var(--text)",overflow:"hidden",
-                textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cat}</span>
-              {/* Shape */}
-              <select value={shapeMap[cat]||"circle"} onChange={e=>onShapeChange(cat,e.target.value)}
-                style={{background:"var(--panel2)",border:"1px solid var(--border)",color:"var(--text)",
-                  borderRadius:5,padding:"3px 5px",fontSize:10,fontFamily:"inherit",cursor:"pointer",width:"100%"}}>
-                {SHAPES.map(s=><option key={s} value={s}>{s}</option>)}
-              </select>
-              {/* Opacity */}
-              <div style={{display:"flex",alignItems:"center",gap:4}}>
-                <input type="range" min="0" max="1" step="0.05"
-                  value={opacityMap[cat]??0.7}
-                  onChange={e=>onOpacityChange(cat,+e.target.value)}
-                  style={{width:44}}/>
-                <span style={{fontSize:9,color:"var(--text-muted)",minWidth:22,textAlign:"right"}}>
-                  {Math.round((opacityMap[cat]??0.7)*100)}%
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{padding:"9px 16px",borderTop:"1px solid var(--border)",fontSize:10,
-          color:"var(--text-muted)",textAlign:"center"}}>
-          Click colour swatch · Choose shape · Drag slider for polygon/line fill opacity
-        </div>
+            );
+          })
+        }
       </div>
     </div>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════
-   FILTER PANEL
-═══════════════════════════════════════════════════════════ */
-function FilterPanel({ fields, features, filters, onFiltersChange, onClose }) {
-  const [field, setField]   = useState(fields[0]||"");
-  const [op,    setOp]      = useState("=");
-  const [val,   setVal]     = useState("");
-  const uniqueVals = useMemo(()=>{
-    if(!field||!features?.length) return [];
-    return [...new Set(features.map(f=>String(f.properties?.[field]??"")).filter(Boolean))].sort().slice(0,50);
-  },[field,features]);
+/* ═══════════════════════════════════════════
+   NORTH ARROW
+═══════════════════════════════════════════ */
+function NorthArrow(){
+  return(
+    <div style={{position:"absolute",right:14,top:110,zIndex:500,
+      width:38,height:38,background:"var(--panel)",border:"1.5px solid var(--border)",
+      borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",
+      boxShadow:"0 2px 8px var(--shadow)"}}>
+      <svg width="28" height="28" viewBox="0 0 28 28">
+        <text x="14" y="25" textAnchor="middle" fontSize="7" fontWeight="700"
+          fill="var(--text-muted)" fontFamily="Inter,DM Sans,sans-serif">N</text>
+        <polygon points="14,4 16.5,14 14,12 11.5,14" fill="var(--accent)"/>
+        <polygon points="14,22 16.5,14 14,16 11.5,14" fill="var(--border)"/>
+      </svg>
+    </div>
+  );
+}
 
-  const add = () => {
-    if(!field||!val) return;
-    onFiltersChange([...filters,{id:Date.now(),field,op,val}]);
-    setVal("");
+/* ═══════════════════════════════════════════
+   GEOCODER
+═══════════════════════════════════════════ */
+function GeocoderSearch({mapRef}){
+  const [open,setOpen]=useState(false);
+  const [q,setQ]=useState("");
+  const [results,setResults]=useState([]);
+  const [loading,setLoading]=useState(false);
+  const timer=useRef(null),inputRef=useRef(null);
+
+  useEffect(()=>{if(open)setTimeout(()=>inputRef.current?.focus(),80);},[open]);
+
+  useEffect(()=>{
+    clearTimeout(timer.current);
+    if(q.trim().length<2){setResults([]);return;}
+    setLoading(true);
+    timer.current=setTimeout(async()=>{
+      try{
+        const res=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=6&addressdetails=1`,{headers:{"Accept-Language":"en"}});
+        setResults(await res.json());
+      }catch{setResults([]);}
+      finally{setLoading(false);}
+    },400);
+  },[q]);
+
+  const goTo=r=>{
+    if(!mapRef.current) return;
+    const L=window.L,lat=+r.lat,lon=+r.lon;
+    mapRef.current.setView([lat,lon],14);
+    const m=L.circleMarker([lat,lon],{radius:8,color:"#C8922A",fillColor:"#C8922A",fillOpacity:1,weight:2}).addTo(mapRef.current);
+    m.bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;color:#1A2B4A;min-width:160px;padding:4px"><strong>${r.display_name.split(",")[0]}</strong><br/><span style="color:#7a8fa8;font-size:10px">${r.display_name.split(",").slice(1,3).join(",")}</span></div>`).openPopup();
+    setTimeout(()=>m.remove(),8000);
+    setOpen(false);setQ("");setResults([]);
   };
-  const remove = id => onFiltersChange(filters.filter(f=>f.id!==id));
 
-  return (
-    <div style={{position:"fixed",inset:0,zIndex:1000,display:"flex",alignItems:"center",
-      justifyContent:"center",background:"rgba(0,0,0,0.6)"}} onClick={onClose}>
-      <div style={{background:"var(--panel)",border:"1px solid var(--border)",borderRadius:14,
-        width:400,maxHeight:"75vh",display:"flex",flexDirection:"column",
-        boxShadow:"0 24px 64px var(--shadow)"}} onClick={e=>e.stopPropagation()}>
-
-        <div style={{padding:"13px 16px",borderBottom:"1px solid var(--border)",
-          display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <Icon name="filter" size={14} color="var(--accent)"/>
-            <span style={{fontSize:12,fontWeight:700,letterSpacing:"0.08em",color:"var(--text-muted)"}}>ATTRIBUTE FILTER</span>
+  return(
+    <div style={{position:"relative"}}>
+      <button onClick={()=>setOpen(p=>!p)} title="Search location"
+        style={{width:38,height:38,borderRadius:10,background:open?"var(--accent)":"var(--panel)",
+          border:`1.5px solid ${open?"var(--accent)":"var(--border)"}`,cursor:"pointer",
+          display:"flex",alignItems:"center",justifyContent:"center",
+          color:open?"#fff":"var(--text-muted)",transition:"all 0.15s",
+          boxShadow:"0 2px 8px var(--shadow)"}}>
+        <Icon name="search" size={15} color={open?"#fff":"var(--text-muted)"}/>
+      </button>
+      {open&&(
+        <div style={{position:"absolute",bottom:46,right:0,width:300,
+          background:"var(--panel)",border:"1.5px solid var(--border)",
+          borderRadius:14,overflow:"hidden",boxShadow:"0 12px 40px var(--shadow)",zIndex:700}}>
+          <div style={{padding:"10px 12px",borderBottom:"1px solid var(--border)",
+            display:"flex",alignItems:"center",gap:8}}>
+            <Icon name="search" size={14} color="var(--text-muted)"/>
+            <input ref={inputRef} value={q} onChange={e=>setQ(e.target.value)}
+              placeholder="Search places…"
+              style={{flex:1,background:"transparent",border:"none",outline:"none",
+                color:"var(--text)",fontSize:13,fontFamily:"Inter,DM Sans,sans-serif"}}/>
+            {loading&&<div style={{width:13,height:13,border:"2px solid var(--accent)",
+              borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>}
+            {!loading&&q&&<button onClick={()=>{setQ("");setResults([]);}}
+              style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",padding:0}}>
+              <Icon name="x" size={13}/>
+            </button>}
           </div>
-          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)"}}>
-            <Icon name="x" size={16}/>
-          </button>
-        </div>
-
-        {/* Add filter row */}
-        <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",gap:6,flexWrap:"wrap"}}>
-          <select value={field} onChange={e=>setField(e.target.value)}
-            style={{flex:2,background:"var(--panel2)",border:"1px solid var(--border)",color:"var(--text)",
-              borderRadius:6,padding:"6px 8px",fontSize:11,fontFamily:"inherit"}}>
-            {fields.map(f=><option key={f} value={f}>{f}</option>)}
-          </select>
-          <select value={op} onChange={e=>setOp(e.target.value)}
-            style={{flex:"0 0 56px",background:"var(--panel2)",border:"1px solid var(--border)",color:"var(--text)",
-              borderRadius:6,padding:"6px 4px",fontSize:11,fontFamily:"inherit"}}>
-            {["=","≠","contains","starts"].map(o=><option key={o} value={o}>{o}</option>)}
-          </select>
-          <select value={val} onChange={e=>setVal(e.target.value)}
-            style={{flex:2,background:"var(--panel2)",border:"1px solid var(--border)",color:"var(--text)",
-              borderRadius:6,padding:"6px 8px",fontSize:11,fontFamily:"inherit"}}>
-            <option value="">— pick value —</option>
-            {uniqueVals.map(v=><option key={v} value={v}>{v}</option>)}
-          </select>
-          <button onClick={add}
-            style={{flex:"0 0 36px",background:"var(--accent)",border:"none",borderRadius:6,
-              cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#0e0e0c"}}>
-            <Icon name="plus" size={14} color="#0e0e0c"/>
-          </button>
-        </div>
-
-        {/* Active filters */}
-        <div style={{flex:1,overflowY:"auto",padding:filters.length?"8px 16px":0}}>
-          {filters.length===0?(
-            <div style={{padding:28,textAlign:"center",fontSize:12,color:"var(--text-muted)",opacity:0.5}}>
-              No filters applied — all features visible
+          {results.length>0&&(
+            <div style={{maxHeight:220,overflowY:"auto"}}>
+              {results.map((r,i)=>(
+                <button key={i} onClick={()=>goTo(r)}
+                  style={{display:"flex",alignItems:"flex-start",gap:10,width:"100%",
+                    padding:"10px 14px",background:"transparent",border:"none",
+                    borderBottom:"1px solid var(--border)",cursor:"pointer",textAlign:"left"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="var(--hover)"}
+                  onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  <Icon name="pin" size={14} color="var(--accent)"/>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:600,color:"var(--text)",
+                      fontFamily:"Inter,DM Sans,sans-serif"}}>{r.display_name.split(",")[0]}</div>
+                    <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2,
+                      fontFamily:"Inter,DM Sans,sans-serif"}}>{r.display_name.split(",").slice(1,4).join(", ")}</div>
+                  </div>
+                </button>
+              ))}
             </div>
-          ):filters.map(f=>(
-            <div key={f.id} style={{display:"flex",alignItems:"center",gap:8,
-              padding:"8px 10px",marginBottom:6,background:"var(--panel2)",
-              border:"1px solid var(--border)",borderRadius:8}}>
-              <span style={{flex:1,fontSize:11,color:"var(--text)"}}>
-                <span style={{color:"var(--accent)",fontWeight:600}}>{f.field}</span>
-                {" "}<span style={{color:"var(--text-muted)"}}>{f.op}</span>{" "}
-                <span style={{color:"var(--success)"}}>"{f.val}"</span>
+          )}
+          {results.length===0&&q.trim().length>=2&&!loading&&(
+            <div style={{padding:"16px 14px",fontSize:12,color:"var(--text-muted)",textAlign:"center",fontFamily:"Inter,DM Sans,sans-serif"}}>No results found</div>
+          )}
+          {q.trim().length<2&&(
+            <div style={{padding:"14px",fontSize:11,color:"var(--text-muted)",fontFamily:"Inter,DM Sans,sans-serif",lineHeight:1.6}}>
+              Search any place — Rwanda, mine sites, coordinates…
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   SYMBOL EDITOR MODAL
+═══════════════════════════════════════════ */
+function SymbolEditor({layer,customColorMap,customShapeMap,customOpacityMap,primaryField,onColorChange,onShapeChange,onOpacityChange,onClose}){
+  const geomType=detectGeomType(layer?.geojson);
+  const isPoint=geomType==="Point",isPoly=geomType==="Polygon";
+  const baseColorMap=useMemo(()=>buildColorMap(layer?.geojson?.features||[],primaryField),[layer,primaryField]);
+  const cats=Object.keys(baseColorMap);
+  const getColor=cat=>customColorMap[cat]||baseColorMap[cat]||"#888";
+
+  return(
+    <Modal title="Symbol Editor" subtitle={`${geomType} Layer — ${layer?.name||""}`} onClose={onClose} width={430}>
+      <div style={{display:"grid",
+        gridTemplateColumns:isPoint?"28px 1fr 88px 80px":"28px 1fr 80px",
+        gap:8,padding:"8px 18px",borderBottom:"1px solid var(--border)",
+        fontSize:10,color:"var(--text-muted)",fontWeight:600,letterSpacing:"0.08em",fontFamily:"Inter,DM Sans,sans-serif"}}>
+        <span/><span>CLASS</span>{isPoint&&<span>SHAPE</span>}<span>{isPoly?"FILL %":"OPACITY"}</span>
+      </div>
+      <div style={{overflowY:"auto",flex:1}}>
+        {cats.length===0?<EmptyMsg>Select a field first</EmptyMsg>
+          :cats.map(cat=>(
+          <div key={cat} style={{display:"grid",
+            gridTemplateColumns:isPoint?"28px 1fr 88px 80px":"28px 1fr 80px",
+            gap:8,padding:"10px 18px",borderBottom:"1px solid var(--border)",alignItems:"center"}}>
+            <div style={{position:"relative",width:24,height:24,borderRadius:"50%",
+              background:getColor(cat),border:"2px solid var(--border)",overflow:"hidden",cursor:"pointer"}}>
+              <input type="color" value={getColor(cat)} onChange={e=>onColorChange(cat,e.target.value)}
+                style={{opacity:0,position:"absolute",inset:0,width:"100%",height:"100%",cursor:"pointer",padding:0}}/>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+              <span dangerouslySetInnerHTML={{__html:legendSwatch(geomType,getColor(cat),customShapeMap[cat]||"circle",22,13)}}
+                style={{flexShrink:0,display:"flex",alignItems:"center"}}/>
+              <span style={{fontSize:12,color:"var(--text)",overflow:"hidden",
+                textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"Inter,DM Sans,sans-serif"}}>{cat}</span>
+            </div>
+            {isPoint&&(
+              <select value={customShapeMap[cat]||"circle"} onChange={e=>onShapeChange(cat,e.target.value)}
+                style={ss({fontSize:10,padding:"3px 5px"})}>
+                {POINT_SHAPES.map(s=><option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <input type="range" min="0" max="1" step="0.05"
+                value={customOpacityMap[cat]??0.85}
+                onChange={e=>onOpacityChange(cat,+e.target.value)}
+                style={{flex:1}}/>
+              <span style={{fontSize:10,color:"var(--text-muted)",minWidth:26,
+                textAlign:"right",fontFamily:"monospace"}}>
+                {Math.round((customOpacityMap[cat]??0.85)*100)}%
               </span>
-              <button onClick={()=>remove(f.id)}
-                style={{background:"none",border:"none",cursor:"pointer",color:"var(--danger)",padding:2}}>
-                <Icon name="x" size={13}/>
-              </button>
             </div>
-          ))}
-        </div>
-        {filters.length>0&&(
-          <div style={{padding:"10px 16px",borderTop:"1px solid var(--border)",
-            display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontSize:11,color:"var(--text-muted)"}}>
-              {filters.length} active filter{filters.length>1?"s":""}
+          </div>
+        ))}
+      </div>
+      <div style={{padding:"10px 18px",borderTop:"1px solid var(--border)",fontSize:11,
+        color:"var(--text-muted)",textAlign:"center",fontFamily:"Inter,DM Sans,sans-serif"}}>
+        {isPoly?"Rectangles in legend · Fill opacity slider":isPoint?"Click colour · Choose shape · Opacity":"Click colour · Adjust opacity"}
+      </div>
+    </Modal>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   FILTER PANEL
+═══════════════════════════════════════════ */
+function FilterPanel({fields,features,filters,onFiltersChange,onClose}){
+  const [field,setField]=useState(fields[0]||"");
+  const [op,setOp]=useState("=");
+  const [val,setVal]=useState("");
+  const uniqueVals=useMemo(()=>{
+    if(!field||!features?.length) return [];
+    return[...new Set(features.map(f=>String(f.properties?.[field]??"")).filter(Boolean))].sort().slice(0,60);
+  },[field,features]);
+  const add=()=>{if(!field||!val) return;onFiltersChange([...filters,{id:Date.now(),field,op,val}]);setVal("");};
+  return(
+    <Modal title="Attribute Filter" onClose={onClose} width={430}>
+      <div style={{padding:"12px 18px",borderBottom:"1px solid var(--border)",display:"flex",gap:8,flexWrap:"wrap"}}>
+        <select value={field} onChange={e=>setField(e.target.value)} style={{...ss(),flex:2}}>
+          {fields.map(f=><option key={f} value={f}>{f}</option>)}
+        </select>
+        <select value={op} onChange={e=>setOp(e.target.value)} style={{...ss(),flex:"0 0 60px"}}>
+          {["=","≠","contains","starts"].map(o=><option key={o} value={o}>{o}</option>)}
+        </select>
+        <select value={val} onChange={e=>setVal(e.target.value)} style={{...ss(),flex:2}}>
+          <option value="">— pick value —</option>
+          {uniqueVals.map(v=><option key={v} value={v}>{v}</option>)}
+        </select>
+        <button onClick={add}
+          style={{flex:"0 0 38px",height:36,background:"var(--accent)",border:"none",
+            borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Icon name="plus" size={16} color="#fff"/>
+        </button>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:filters.length?"10px 18px":0}}>
+        {filters.length===0?<EmptyMsg>No filters — all features visible</EmptyMsg>
+          :filters.map(f=>(
+          <div key={f.id} style={{display:"flex",alignItems:"center",gap:10,
+            padding:"10px 12px",marginBottom:8,background:"var(--panel2)",
+            border:"1px solid var(--border)",borderRadius:10}}>
+            <span style={{flex:1,fontSize:12,fontFamily:"Inter,DM Sans,sans-serif"}}>
+              <strong style={{color:"var(--accent)"}}>{f.field}</strong>
+              {" "}<span style={{color:"var(--text-muted)"}}>{f.op}</span>{" "}
+              <span style={{color:"var(--success)",fontStyle:"italic"}}>"{f.val}"</span>
             </span>
-            <button onClick={()=>onFiltersChange([])}
-              style={{fontSize:11,color:"var(--danger)",background:"none",border:"none",cursor:"pointer"}}>
-              Clear all
+            <button onClick={()=>onFiltersChange(filters.filter(x=>x.id!==f.id))}
+              style={{background:"none",border:"none",cursor:"pointer",color:"var(--danger)",padding:2}}>
+              <Icon name="x" size={14}/>
             </button>
+          </div>
+        ))}
+      </div>
+      {filters.length>0&&(
+        <div style={{padding:"10px 18px",borderTop:"1px solid var(--border)",
+          display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:12,color:"var(--text-muted)",fontFamily:"Inter,DM Sans,sans-serif"}}>
+            {filters.length} active filter{filters.length>1?"s":""}
+          </span>
+          <button onClick={()=>onFiltersChange([])}
+            style={{fontSize:12,color:"var(--danger)",background:"none",border:"none",cursor:"pointer"}}>
+            Clear all
+          </button>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   EXPORT MODAL — dismisses itself before capture
+═══════════════════════════════════════════ */
+function ExportModal({dashboardRef,mapDivRef,projectTitle,onClose}){
+  const [exporting,setExporting]=useState(false);
+  const [done,setDone]=useState("");
+
+  const doExport=async mode=>{
+    // Step 1: close the modal completely, wait for DOM update
+    onClose();
+    await new Promise(r=>setTimeout(r,350));
+    setExporting(true);
+    try{
+      const target=mode==="map"?mapDivRef.current:dashboardRef.current;
+      const canvas=await window.html2canvas(target,{useCORS:true,allowTaint:true,scale:2,logging:false});
+      if(mode==="pdf"){
+        const pdf=new window.jspdf.jsPDF({orientation:"landscape",unit:"px",format:[canvas.width/2,canvas.height/2]});
+        pdf.addImage(canvas.toDataURL("image/png"),"PNG",0,0,canvas.width/2,canvas.height/2);
+        pdf.save(`${projectTitle||"geocore"}.pdf`);
+      } else {
+        const a=document.createElement("a");
+        a.href=canvas.toDataURL("image/png");
+        a.download=`${projectTitle||"geocore"}_${mode}.png`;
+        a.click();
+      }
+    }catch(err){alert("Export failed: "+err.message);}
+    finally{setExporting(false);}
+  };
+
+  const opts=[
+    {key:"map",   icon:"map",    label:"Map only",       desc:"High-resolution PNG of the map"},
+    {key:"dashboard",icon:"chart",label:"Full dashboard", desc:"Entire dashboard as PNG"},
+    {key:"pdf",   icon:"export", label:"PDF document",   desc:"Full dashboard as landscape PDF"},
+  ];
+
+  return(
+    <Modal title="Export" onClose={onClose} width={360}>
+      <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:10}}>
+        {opts.map(opt=>(
+          <button key={opt.key} onClick={()=>doExport(opt.key)} disabled={exporting}
+            style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",
+              background:"var(--panel2)",border:"1.5px solid var(--border)",
+              borderRadius:12,cursor:exporting?"not-allowed":"pointer",
+              textAlign:"left",width:"100%",transition:"all 0.15s"}}
+            onMouseEnter={e=>{if(!exporting){e.currentTarget.style.borderColor="var(--accent)";e.currentTarget.style.background="var(--accent-soft)";}}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.background="var(--panel2)";}}>
+            <div style={{width:40,height:40,borderRadius:10,background:"var(--panel3)",
+              display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <Icon name={opt.icon} size={20} color="var(--accent)"/>
+            </div>
+            <div>
+              <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:3,fontFamily:"Inter,DM Sans,sans-serif"}}>{opt.label}</div>
+              <div style={{fontSize:11,color:"var(--text-muted)",fontFamily:"Inter,DM Sans,sans-serif"}}>{opt.desc}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+      <div style={{padding:"10px 18px",borderTop:"1px solid var(--border)",fontSize:11,
+        color:"var(--text-muted)",textAlign:"center",fontFamily:"Inter,DM Sans,sans-serif"}}>
+        Modal closes before capture — exports are clean
+      </div>
+    </Modal>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   LAYOUT PICKER MODAL
+═══════════════════════════════════════════ */
+function LayoutPicker({onPick,onClose}){
+  return(
+    <Modal title="Dashboard Layout" subtitle="Choose how to arrange your workspace" onClose={onClose} width={480}>
+      <div style={{padding:20,display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+        {Object.entries(LAYOUT_TEMPLATES).map(([key,tpl])=>(
+          <button key={key} onClick={()=>{onPick(key);onClose();}}
+            style={{padding:"20px 16px",background:"var(--panel2)",
+              border:"1.5px solid var(--border)",borderRadius:14,cursor:"pointer",
+              textAlign:"center",transition:"all 0.15s",fontFamily:"inherit"}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--accent)";e.currentTarget.style.background="var(--accent-soft)";}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.background="var(--panel2)";}}>
+            <div style={{fontSize:32,marginBottom:10}}>{tpl.icon}</div>
+            <div style={{fontSize:14,fontWeight:700,color:"var(--text)",marginBottom:4,fontFamily:"Inter,DM Sans,sans-serif"}}>{tpl.label}</div>
+            <div style={{fontSize:11,color:"var(--text-muted)",fontFamily:"Inter,DM Sans,sans-serif"}}>{tpl.desc}</div>
+          </button>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   MAP PANEL (extracted for reuse in layouts)
+═══════════════════════════════════════════ */
+function MapPanel({mapDivRef,layers,visibleFeatsByLayer,customColorMap,customShapeMap,customOpacityMap,layerOpacity,
+  primaryLayerId,primaryField,applyFilters,basemap,showLabels,labelField,
+  measureMode,setMeasureMode,measureResult,setMeasureResult,
+  basemapOpen,setBasemapOpen,setBasemap,mapRef,isDark}){
+  return(
+    <div style={{position:"relative",width:"100%",height:"100%",overflow:"hidden"}}>
+      <div ref={mapDivRef} style={{width:"100%",height:"100%"}}/>
+      <NorthArrow/>
+      {/* Toolbar */}
+      <div style={{position:"absolute",left:12,top:12,zIndex:500,display:"flex",gap:7}}>
+        <div style={{position:"relative"}}>
+          <Btn onClick={()=>setBasemapOpen(p=>!p)} active={basemapOpen}>
+            <Icon name="map" size={13} color={basemapOpen?"#fff":"var(--accent)"}/> {basemap}
+            <Icon name="chevD" size={11} color={basemapOpen?"#fff":"var(--text-muted)"}/>
+          </Btn>
+          {basemapOpen&&(
+            <div style={{position:"absolute",top:42,left:0,background:"var(--panel)",
+              border:"1.5px solid var(--border)",borderRadius:12,overflow:"hidden",
+              boxShadow:"0 12px 40px var(--shadow)",zIndex:600,minWidth:140}}>
+              {Object.keys(BASEMAPS).map(name=>(
+                <button key={name} onClick={()=>{setBasemap(name);setBasemapOpen(false);}}
+                  style={{display:"flex",alignItems:"center",gap:8,width:"100%",
+                    padding:"10px 16px",textAlign:"left",
+                    background:basemap===name?"var(--accent-soft)":"transparent",
+                    color:basemap===name?"var(--accent)":"var(--text)",
+                    fontSize:12,fontWeight:basemap===name?700:400,
+                    border:"none",borderBottom:"1px solid var(--border)",
+                    cursor:"pointer",fontFamily:"Inter,DM Sans,sans-serif"}}>
+                  {basemap===name&&<Icon name="check" size={12} color="var(--accent)"/>}{name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {[{mode:"distance",label:"Distance",icon:"ruler"},{mode:"area",label:"Area",icon:"area"}].map(m=>(
+          <Btn key={m.mode} onClick={()=>setMeasureMode(p=>p===m.mode?null:m.mode)} active={measureMode===m.mode}>
+            <Icon name={m.icon} size={13} color={measureMode===m.mode?"#fff":"var(--text-muted)"}/>{m.label}
+          </Btn>
+        ))}
+      </div>
+      {/* Measure result */}
+      {measureResult&&(
+        <div style={{position:"absolute",left:"50%",top:60,transform:"translateX(-50%)",zIndex:500,
+          background:"var(--panel)",border:"1.5px solid var(--accent)",borderRadius:10,
+          padding:"10px 20px",fontSize:14,fontWeight:700,color:"var(--accent)",
+          boxShadow:"0 6px 24px var(--shadow)",display:"flex",alignItems:"center",gap:12}}>
+          📐 {measureResult}
+          <button onClick={()=>{setMeasureResult("");setMeasureMode(null);}}
+            style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)"}}>
+            <Icon name="x" size={14}/>
+          </button>
+        </div>
+      )}
+      {measureMode&&!measureResult&&(
+        <div style={{position:"absolute",left:"50%",top:60,transform:"translateX(-50%)",zIndex:500,
+          background:"rgba(26,43,74,0.92)",border:"1px solid rgba(200,146,42,0.3)",borderRadius:10,
+          padding:"8px 18px",fontSize:12,color:"rgba(255,255,255,0.85)",fontWeight:500}}>
+          {measureMode==="distance"?"Click points to measure distance":"Click 3+ points to measure area"}
+        </div>
+      )}
+      {/* Right controls */}
+      <div style={{position:"absolute",right:14,bottom:38,zIndex:500,display:"flex",flexDirection:"column",gap:7}}>
+        {[["zIn",()=>mapRef.current?.zoomIn()],["zOut",()=>mapRef.current?.zoomOut()],
+          ["home",()=>mapRef.current?.setView(RWANDA.center,RWANDA.zoom)]].map(([ic,fn])=>(
+          <button key={ic} onClick={fn}
+            style={{width:38,height:38,borderRadius:10,background:"var(--panel)",
+              border:"1.5px solid var(--border)",cursor:"pointer",display:"flex",
+              alignItems:"center",justifyContent:"center",color:"var(--text-muted)",
+              boxShadow:"0 2px 8px var(--shadow)",transition:"all 0.12s"}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--accent)";e.currentTarget.style.color="var(--accent)";}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.color="var(--text-muted)";}}>
+            <Icon name={ic} size={16}/>
+          </button>
+        ))}
+        <GeocoderSearch mapRef={mapRef}/>
+      </div>
+      {/* Status bar */}
+      <div style={{position:"absolute",bottom:0,left:0,right:0,height:24,
+        background:isDark?"rgba(15,25,35,0.92)":"rgba(255,255,255,0.92)",
+        borderTop:"1px solid var(--border)",display:"flex",alignItems:"center",
+        justifyContent:"flex-end",padding:"0 12px",zIndex:499}}>
+        <span style={{fontSize:10,color:"var(--text-muted)",opacity:0.8}}>
+          {["Satellite","Hybrid"].includes(basemap)?"© Google":"© OpenStreetMap contributors"}
+        </span>
+      </div>
+      {!layers.length&&(
+        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",
+          justifyContent:"center",pointerEvents:"none",zIndex:400}}>
+          <div style={{background:isDark?"rgba(15,25,35,0.93)":"rgba(255,255,255,0.96)",
+            border:"1.5px solid var(--border)",borderRadius:18,padding:"32px 48px",textAlign:"center",
+            boxShadow:"0 24px 64px var(--shadow)"}}>
+            <svg width="48" height="48" viewBox="0 0 36 36" style={{margin:"0 auto"}}>
+              <polygon points="18,3 33,30 3,30" fill="var(--navy)" stroke="var(--accent)" strokeWidth="1.5"/>
+              <polygon points="18,10 26,25 10,25" fill="var(--accent)" opacity="0.85"/>
+            </svg>
+            <div style={{marginTop:16,fontSize:16,fontWeight:800,color:"var(--text)"}}>No data loaded</div>
+            <div style={{marginTop:8,fontSize:12,color:"var(--text-muted)",lineHeight:1.8}}>
+              Upload shapefile, GeoJSON or CSV<br/>using <strong>Add Data</strong> above
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   DASHBOARD LAYOUT VIEW
+   Renders selected layout template with
+   independently configured widgets per slot.
+═══════════════════════════════════════════ */
+function LayoutView({layoutKey,slots,onSlotChange,layers,visibleFeatsByLayer,mapProps,isDark,dashRef}){
+  const tpl=LAYOUT_TEMPLATES[layoutKey];
+
+  // Map slot names to grid-area values per template
+  const slotAreas={
+    classic:  {sidebar:"sidebar", map:"map"},
+    dual:     {left:"left", map:"map", right:"right"},
+    grid:     {tl:"tl", tr:"tr", bl:"bl", br:"br"},
+    focus:    {map:"map", c1:"c1", c2:"c2", c3:"c3"},
+  };
+  const areas=slotAreas[layoutKey]||{};
+
+  const renderSlot=(slotKey)=>{
+    const slotCfg=slots[slotKey]||{type:"chart",layerId:"",field:"",chartType:"bar",chartMode:"count"};
+    if(slotCfg.type==="map") return(
+      <div style={{gridArea:areas[slotKey],overflow:"hidden",position:"relative",
+        border:"1px solid var(--border)",borderRadius:4}}>
+        <MapPanel {...mapProps} isDark={isDark}/>
+      </div>
+    );
+    if(slotCfg.type==="legend") return(
+      <div style={{gridArea:areas[slotKey],overflow:"hidden",background:"var(--panel)",
+        border:"1px solid var(--border)",borderRadius:4,display:"flex",flexDirection:"column"}}>
+        <SlotHeader slotKey={slotKey} slotCfg={slotCfg} onSlotChange={onSlotChange} layers={layers}/>
+        <LegendWidget layers={layers} visibleFeatsByLayer={visibleFeatsByLayer}
+          config={slotCfg} onConfigChange={p=>onSlotChange(slotKey,{...slotCfg,...p})}/>
+      </div>
+    );
+    // chart (default)
+    return(
+      <div style={{gridArea:areas[slotKey],overflow:"hidden",background:"var(--panel)",
+        border:"1px solid var(--border)",borderRadius:4,display:"flex",flexDirection:"column"}}>
+        <SlotHeader slotKey={slotKey} slotCfg={slotCfg} onSlotChange={onSlotChange} layers={layers}/>
+        <div style={{flex:1,minHeight:0,overflow:"hidden"}}>
+          <ChartWidget layers={layers} visibleFeatsByLayer={visibleFeatsByLayer}
+            config={slotCfg} onConfigChange={p=>onSlotChange(slotKey,{...slotCfg,...p})}
+            isDark={isDark} compact={true}/>
+        </div>
+      </div>
+    );
+  };
+
+  return(
+    <div ref={dashRef} style={{
+      display:"grid",
+      gridTemplateAreas:tpl.areas,
+      gridTemplateColumns:tpl.cols,
+      gridTemplateRows:tpl.rows,
+      width:"100%",height:"100%",gap:4,padding:4,
+      background:"var(--bg)",overflow:"hidden",
+    }}>
+      {Object.keys(areas).map(slotKey=>renderSlot(slotKey))}
+    </div>
+  );
+}
+
+function SlotHeader({slotKey,slotCfg,onSlotChange,layers}){
+  const [open,setOpen]=useState(false);
+  return(
+    <div style={{padding:"6px 10px",borderBottom:"1px solid var(--border)",flexShrink:0,
+      display:"flex",alignItems:"center",justifyContent:"space-between",
+      background:"var(--panel2)"}}>
+      <span style={{fontSize:10,fontWeight:700,color:"var(--text-muted)",
+        letterSpacing:"0.06em",fontFamily:"Inter,DM Sans,sans-serif",textTransform:"uppercase"}}>
+        {slotCfg.type==="map"?"Map":slotCfg.type==="legend"?"Legend":`Chart`}
+      </span>
+      <div style={{position:"relative"}}>
+        <button onClick={()=>setOpen(p=>!p)}
+          style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",padding:"2px 6px",
+            borderRadius:5,display:"flex",alignItems:"center",gap:4,fontSize:10,fontFamily:"inherit"}}>
+          <Icon name="edit2" size={11}/>
+        </button>
+        {open&&(
+          <div style={{position:"absolute",top:24,right:0,background:"var(--panel)",
+            border:"1.5px solid var(--border)",borderRadius:10,overflow:"hidden",
+            boxShadow:"0 8px 32px var(--shadow)",zIndex:600,minWidth:150}}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"8px 12px",borderBottom:"1px solid var(--border)",
+              fontSize:10,fontWeight:700,color:"var(--text-muted)",letterSpacing:"0.06em",
+              fontFamily:"Inter,DM Sans,sans-serif"}}>WIDGET TYPE</div>
+            {["chart","legend","map"].map(t=>(
+              <button key={t} onClick={()=>{onSlotChange(slotKey,{...slotCfg,type:t});setOpen(false);}}
+                style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",
+                  background:slotCfg.type===t?"var(--accent-soft)":"transparent",
+                  color:slotCfg.type===t?"var(--accent)":"var(--text)",
+                  fontSize:12,fontWeight:slotCfg.type===t?700:400,
+                  border:"none",borderBottom:"1px solid var(--border)",cursor:"pointer",
+                  fontFamily:"Inter,DM Sans,sans-serif",textTransform:"capitalize"}}>
+                {slotCfg.type===t&&<Icon name="check" size={12} color="var(--accent)"/>}{t}
+              </button>
+            ))}
           </div>
         )}
       </div>
@@ -493,271 +1155,170 @@ function FilterPanel({ fields, features, filters, onFiltersChange, onClose }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════
-   EXPORT MODAL
-═══════════════════════════════════════════════════════════ */
-function ExportModal({ dashboardRef, mapDivRef, projectTitle, onClose }) {
-  const [exporting, setExporting] = useState(false);
-  const [done, setDone]           = useState("");
+/* ═══════════════════════════════════════════
+   PROJECTS PAGE
+═══════════════════════════════════════════ */
+function ProjectsPage({onOpen,theme,onThemeToggle}){
+  const [projects,setProjects]=useState([]);
+  const [creating,setCreating]=useState(false);
+  const [newName,setNewName]=useState("");
+  const [loading,setLoading]=useState(true);
+  const isDark=theme==="dark";
 
-  const doExport = async (mode) => {
-    setExporting(true); setDone("");
-    try {
-      const h2c = window.html2canvas;
-      const jsPDF = window.jspdf?.jsPDF;
-      let canvas;
+  useEffect(()=>{dbGetAll().then(p=>{setProjects(p.sort((a,b)=>b.updatedAt-a.updatedAt));setLoading(false);}).catch(()=>setLoading(false));;},[]);
 
-      if (mode==="map") {
-        canvas = await h2c(mapDivRef.current, { useCORS:true, allowTaint:true, scale:2 });
-      } else {
-        canvas = await h2c(dashboardRef.current, { useCORS:true, allowTaint:true, scale:2 });
-      }
-
-      if (mode==="pdf") {
-        const pdf = new jsPDF({ orientation:"landscape", unit:"px", format:[canvas.width/2,canvas.height/2] });
-        pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, canvas.width/2, canvas.height/2);
-        pdf.save(`${projectTitle||"geocore"}.pdf`);
-      } else {
-        const a = document.createElement("a");
-        a.href = canvas.toDataURL("image/png");
-        a.download = `${projectTitle||"geocore"}_${mode}.png`;
-        a.click();
-      }
-      setDone(mode);
-    } catch(err) {
-      console.error(err); alert("Export error: "+err.message);
-    } finally { setExporting(false); }
-  };
-
-  const options = [
-    { key:"map",       icon:"map",    label:"Map only",      desc:"Exports the map canvas as PNG" },
-    { key:"dashboard", icon:"chart",  label:"Full dashboard", desc:"Exports map + sidebar as PNG" },
-    { key:"pdf",       icon:"export", label:"PDF",            desc:"Full dashboard as PDF document" },
-  ];
-
-  return (
-    <div style={{position:"fixed",inset:0,zIndex:1000,display:"flex",alignItems:"center",
-      justifyContent:"center",background:"rgba(0,0,0,0.6)"}} onClick={onClose}>
-      <div style={{background:"var(--panel)",border:"1px solid var(--border)",borderRadius:14,
-        width:360,boxShadow:"0 24px 64px var(--shadow)"}} onClick={e=>e.stopPropagation()}>
-        <div style={{padding:"13px 16px",borderBottom:"1px solid var(--border)",
-          display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <Icon name="export" size={14} color="var(--accent)"/>
-            <span style={{fontSize:12,fontWeight:700,letterSpacing:"0.08em",color:"var(--text-muted)"}}>EXPORT</span>
-          </div>
-          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)"}}>
-            <Icon name="x" size={16}/>
-          </button>
-        </div>
-        <div style={{padding:16,display:"flex",flexDirection:"column",gap:10}}>
-          {options.map(opt=>(
-            <button key={opt.key} onClick={()=>doExport(opt.key)} disabled={exporting}
-              style={{display:"flex",alignItems:"center",gap:14,padding:"12px 16px",
-                background:done===opt.key?"var(--hover)":"var(--panel2)",
-                border:`1px solid ${done===opt.key?"var(--success)":"var(--border)"}`,
-                borderRadius:10,cursor:exporting?"not-allowed":"pointer",
-                textAlign:"left",transition:"all 0.15s",width:"100%"}}>
-              <div style={{width:36,height:36,borderRadius:8,background:"var(--panel3)",
-                display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                {done===opt.key
-                  ?<Icon name="check" size={18} color="var(--success)"/>
-                  :<Icon name={opt.icon} size={18} color="var(--accent)"/>
-                }
-              </div>
-              <div>
-                <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:2}}>{opt.label}</div>
-                <div style={{fontSize:10,color:"var(--text-muted)"}}>{opt.desc}</div>
-              </div>
-              {exporting&&<div style={{marginLeft:"auto",width:14,height:14,border:"2px solid var(--accent)",
-                borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>}
-            </button>
-          ))}
-        </div>
-        <div style={{padding:"10px 16px",borderTop:"1px solid var(--border)",fontSize:10,
-          color:"var(--text-muted)",textAlign:"center"}}>
-          Exports reflect exactly what you see on screen
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════
-   PROJECTS LANDING PAGE
-═══════════════════════════════════════════════════════════ */
-function ProjectsPage({ onOpen, theme, onThemeToggle }) {
-  const [projects,  setProjects]  = useState([]);
-  const [creating,  setCreating]  = useState(false);
-  const [newName,   setNewName]   = useState("");
-  const [loading,   setLoading]   = useState(true);
-  const [deleting,  setDeleting]  = useState(null);
-  const isDark = theme==="dark";
-
-  useEffect(()=>{
-    dbGetAll().then(p=>{
-      setProjects(p.sort((a,b)=>b.updatedAt-a.updatedAt));
-      setLoading(false);
-    }).catch(()=>setLoading(false));
-  },[]);
-
-  const createProject = async () => {
+  const createProject=async()=>{
     if(!newName.trim()) return;
-    const proj = {
-      id: Date.now()+"_"+Math.random().toString(36).slice(2),
-      name: newName.trim(),
-      createdAt: Date.now(), updatedAt: Date.now(),
-      layers:[], chartField:"", chartType:"bar", basemap:"Satellite",
-      colorMap:{}, shapeMap:{}, opacityMap:{}, filters:[],
-      charts:[{id:"c1",field:"",type:"bar"}],
-      logoUrl:null, showLabels:false,
+    const proj={
+      id:Date.now()+"_"+Math.random().toString(36).slice(2),
+      name:newName.trim(),createdAt:Date.now(),updatedAt:Date.now(),
+      layers:[],filters:[],basemap:"Satellite",logoUrl:null,
+      showLabels:false,labelField:"",
+      customColorMap:{},customShapeMap:{},customOpacityMap:{},layerOpacity:{},
+      primaryLayerId:null,primaryField:"",
+      sidebarCharts:[{id:"c1",layerId:null,field:"",chartType:"bar",chartMode:"count"}],
+      layoutKey:"classic",layoutSlots:{},
     };
-    await dbPut(proj);
-    setProjects(p=>[proj,...p]);
-    setNewName(""); setCreating(false);
-    onOpen(proj);
+    await dbPut(proj);setProjects(p=>[proj,...p]);
+    setNewName("");setCreating(false);onOpen(proj);
   };
 
-  const deleteProject = async (id, e) => {
+  const deleteProject=async(id,e)=>{
     e.stopPropagation();
-    if(!window.confirm("Delete this project? This cannot be undone.")) return;
-    setDeleting(id);
-    await dbDelete(id);
-    setProjects(p=>p.filter(x=>x.id!==id));
-    setDeleting(null);
+    if(!window.confirm("Delete this project?")) return;
+    await dbDelete(id);setProjects(p=>p.filter(x=>x.id!==id));
   };
 
-  const fmt = ts => {
-    const d = new Date(ts);
-    return d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
-  };
+  const fmt=ts=>new Date(ts).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
 
-  return (
-    <div style={{minHeight:"100vh",background:"var(--bg)",fontFamily:"'DM Mono','Courier New',monospace",color:"var(--text)"}}>
-      {/* Nav */}
-      <nav style={{height:56,background:"var(--panel)",borderBottom:"1px solid var(--border)",
-        display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 32px",position:"sticky",top:0,zIndex:50}}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:32,height:32,borderRadius:8,background:"var(--accent)",
-            display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <Icon name="map" size={17} color="#0e0e0c"/>
+  return(
+    <div style={{minHeight:"100vh",background:"var(--bg)",fontFamily:"Inter,DM Sans,sans-serif",color:"var(--text)"}}>
+      <nav style={{height:60,background:"var(--panel)",borderBottom:"1.5px solid var(--border)",
+        display:"flex",alignItems:"center",justifyContent:"space-between",
+        padding:"0 32px",position:"sticky",top:0,zIndex:50,
+        boxShadow:"0 2px 12px var(--shadow)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <svg width="36" height="36" viewBox="0 0 36 36">
+            <polygon points="18,3 33,30 3,30" fill="var(--navy)" stroke="var(--accent)" strokeWidth="1.5"/>
+            <polygon points="18,10 26,25 10,25" fill="var(--accent)" opacity="0.85"/>
+          </svg>
+          <div>
+            <div style={{fontSize:16,fontWeight:800,letterSpacing:"-0.01em",color:"var(--text)",lineHeight:1}}>
+              GeoCore <span style={{color:"var(--accent)"}}>Platform</span>
+            </div>
+            <div style={{fontSize:10,color:"var(--text-muted)",letterSpacing:"0.06em",marginTop:1}}>
+              TRINITY METALS · SPATIAL INTELLIGENCE
+            </div>
           </div>
-          <span style={{fontSize:15,fontWeight:700,letterSpacing:"0.04em"}}>
-            GEO<span style={{color:"var(--accent)"}}>CORE</span>
-          </span>
-          <span style={{fontSize:10,color:"var(--text-muted)",letterSpacing:"0.1em",
-            background:"var(--panel2)",border:"1px solid var(--border)",
-            borderRadius:4,padding:"2px 8px"}}>v4</span>
         </div>
         <button onClick={onThemeToggle}
-          style={{width:34,height:34,borderRadius:8,background:"var(--panel2)",
-            border:"1px solid var(--border)",cursor:"pointer",display:"flex",
+          style={{width:36,height:36,borderRadius:10,background:"var(--panel2)",
+            border:"1.5px solid var(--border)",cursor:"pointer",display:"flex",
             alignItems:"center",justifyContent:"center",color:"var(--text-muted)"}}>
-          <Icon name={isDark?"sun":"moon"} size={15}/>
+          <Icon name={isDark?"sun":"moon"} size={16}/>
         </button>
       </nav>
 
-      {/* Hero */}
-      <div style={{padding:"64px 32px 40px",maxWidth:900,margin:"0 auto"}}>
-        <div style={{marginBottom:40}}>
-          <h1 style={{fontSize:32,fontWeight:700,letterSpacing:"-0.02em",lineHeight:1.2,marginBottom:12}}>
-            Mining GIS Dashboard
+      <div style={{background:isDark?"var(--panel)":"var(--navy)",
+        padding:"48px 32px 36px",borderBottom:"1.5px solid var(--border)"}}>
+        <div style={{maxWidth:900,margin:"0 auto"}}>
+          <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.12em",color:"var(--accent)",marginBottom:10}}>
+            SPATIAL INTELLIGENCE PLATFORM
+          </div>
+          <h1 style={{fontSize:32,fontWeight:800,letterSpacing:"-0.02em",lineHeight:1.15,
+            marginBottom:12,color:isDark?"var(--text)":"#fff"}}>
+            Rutongo · Nyakabingo · Musha
           </h1>
-          <p style={{fontSize:14,color:"var(--text-muted)",lineHeight:1.7,maxWidth:520}}>
-            Create and manage spatial data visualisation projects. Upload shapefiles, GeoJSON, or CSV data
-            and build interactive maps with charts and analytics.
+          <p style={{fontSize:14,lineHeight:1.8,maxWidth:540,
+            color:isDark?"var(--text-muted)":"rgba(255,255,255,0.72)"}}>
+            Manage spatial data projects for all mine sites. Upload shapefiles, GeoJSON or CSV —
+            multi-layer dashboards, area analytics, and custom layout views.
           </p>
         </div>
+      </div>
 
-        {/* Create section */}
-        <div style={{marginBottom:40}}>
+      <div style={{padding:"40px 32px",maxWidth:960,margin:"0 auto"}}>
+        <div style={{marginBottom:32}}>
+          <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",color:"var(--text-muted)",marginBottom:14}}>PROJECTS</div>
           {creating?(
-            <div style={{display:"flex",gap:10,alignItems:"center",maxWidth:480}}>
+            <div style={{display:"flex",gap:10,alignItems:"center",maxWidth:520}}>
               <input autoFocus value={newName} onChange={e=>setNewName(e.target.value)}
                 onKeyDown={e=>{if(e.key==="Enter")createProject();if(e.key==="Escape")setCreating(false);}}
-                placeholder="Project name e.g. Exploration Zone A"
-                style={{flex:1,background:"var(--panel)",border:"1px solid var(--accent)",
-                  borderRadius:8,padding:"10px 14px",fontSize:13,color:"var(--text)",
-                  fontFamily:"inherit",outline:"none"}}/>
+                placeholder="e.g. Rutongo Land Use 2024"
+                style={{flex:1,background:"var(--panel)",border:"1.5px solid var(--accent)",borderRadius:10,
+                  padding:"11px 16px",fontSize:14,color:"var(--text)",fontFamily:"inherit",outline:"none",
+                  boxShadow:"0 0 0 3px var(--accent-soft)"}}/>
               <button onClick={createProject}
-                style={{height:40,padding:"0 20px",background:"var(--accent)",border:"none",
-                  borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,color:"#0e0e0c",
-                  fontFamily:"inherit"}}>
+                style={{height:44,padding:"0 24px",background:"var(--accent)",border:"none",
+                  borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:700,color:"#fff",fontFamily:"inherit"}}>
                 CREATE
               </button>
               <button onClick={()=>setCreating(false)}
-                style={{height:40,width:40,background:"transparent",border:"1px solid var(--border)",
-                  borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
+                style={{height:44,width:44,background:"transparent",border:"1.5px solid var(--border)",
+                  borderRadius:10,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
                   color:"var(--text-muted)"}}>
-                <Icon name="x" size={15}/>
+                <Icon name="x" size={16}/>
               </button>
             </div>
           ):(
             <button onClick={()=>setCreating(true)}
-              style={{display:"flex",alignItems:"center",gap:8,height:42,padding:"0 22px",
-                background:"var(--accent)",border:"none",borderRadius:8,cursor:"pointer",
-                fontSize:12,fontWeight:700,color:"#0e0e0c",fontFamily:"inherit",letterSpacing:"0.06em"}}>
-              <Icon name="plus" size={15} color="#0e0e0c"/>
-              NEW PROJECT
+              style={{display:"flex",alignItems:"center",gap:8,height:44,padding:"0 24px",
+                background:"var(--accent)",border:"none",borderRadius:10,cursor:"pointer",
+                fontSize:13,fontWeight:700,color:"#fff",fontFamily:"inherit",
+                boxShadow:"0 4px 14px rgba(200,146,42,0.35)"}}>
+              <Icon name="plus" size={16} color="#fff"/> New Project
             </button>
           )}
         </div>
 
-        {/* Projects grid */}
         {loading?(
-          <div style={{display:"flex",alignItems:"center",gap:12,padding:40,
-            fontSize:13,color:"var(--text-muted)"}}>
-            <div style={{width:18,height:18,border:"2px solid var(--accent)",borderTopColor:"transparent",
+          <div style={{display:"flex",alignItems:"center",gap:12,padding:48,fontSize:14,color:"var(--text-muted)"}}>
+            <div style={{width:20,height:20,border:"2px solid var(--accent)",borderTopColor:"transparent",
               borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
             Loading projects…
           </div>
         ):projects.length===0?(
-          <div style={{textAlign:"center",padding:"64px 32px",opacity:0.4}}>
-            <Icon name="folder" size={48} color="var(--text-muted)"/>
-            <div style={{marginTop:16,fontSize:14}}>No projects yet</div>
-            <div style={{marginTop:6,fontSize:12,color:"var(--text-muted)"}}>Create your first project to get started</div>
+          <div style={{textAlign:"center",padding:"72px 32px",opacity:0.35}}>
+            <Icon name="folder" size={52} color="var(--text-muted)"/>
+            <div style={{marginTop:18,fontSize:16,fontWeight:600}}>No projects yet</div>
+            <div style={{marginTop:8,fontSize:13,color:"var(--text-muted)"}}>Create your first project above</div>
           </div>
         ):(
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:16}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(268px,1fr))",gap:18}}>
             {projects.map(proj=>(
               <div key={proj.id} onClick={()=>onOpen(proj)}
-                style={{background:"var(--panel)",border:"1px solid var(--border)",borderRadius:12,
-                  padding:"20px",cursor:"pointer",transition:"all 0.18s",position:"relative",
-                  boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}
-                onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--accent)";e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 24px var(--shadow)";}}
-                onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.12)";}}>
-                {/* Project icon */}
-                <div style={{width:44,height:44,borderRadius:10,background:"var(--hover)",
-                  border:"1px solid var(--border)",display:"flex",alignItems:"center",
+                style={{background:"var(--panel)",border:"1.5px solid var(--border)",borderRadius:14,
+                  padding:22,cursor:"pointer",transition:"all 0.18s",boxShadow:"0 2px 8px var(--shadow)"}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--accent)";e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 10px 32px var(--shadow)";}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 2px 8px var(--shadow)";}}>
+                <div style={{width:44,height:44,borderRadius:12,background:"var(--accent-soft)",
+                  border:"1.5px solid var(--border)",display:"flex",alignItems:"center",
                   justifyContent:"center",marginBottom:14}}>
-                  <Icon name="map" size={20} color="var(--accent)"/>
+                  <Icon name="map" size={22} color="var(--accent)"/>
                 </div>
-                <div style={{fontSize:14,fontWeight:700,marginBottom:4,overflow:"hidden",
+                <div style={{fontSize:15,fontWeight:700,marginBottom:5,overflow:"hidden",
                   textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{proj.name}</div>
-                <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:12}}>
-                  {proj.layers?.length||0} layer{proj.layers?.length!==1?"s":""} ·{" "}
-                  Updated {fmt(proj.updatedAt)}
+                <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:12}}>
+                  {proj.layers?.length||0} layer{proj.layers?.length!==1?"s":""} · {fmt(proj.updatedAt)}
                 </div>
-                {/* Layer dots */}
                 {proj.layers?.length>0&&(
-                  <div style={{display:"flex",gap:4,marginBottom:12,flexWrap:"wrap"}}>
-                    {proj.layers.slice(0,6).map((l,i)=>(
-                      <div key={i} style={{width:8,height:8,borderRadius:"50%",background:l.color||PALETTE[i%PALETTE.length]}}/>
+                  <div style={{display:"flex",gap:5,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+                    {proj.layers.slice(0,8).map((l,i)=>(
+                      <div key={i} title={l.name} style={{width:9,height:9,
+                        borderRadius:l.geomType==="Polygon"?"2px":l.geomType==="Line"?"1px":"50%",
+                        background:l.color||CHART_PALETTE[i%CHART_PALETTE.length]}}/>
                     ))}
-                    {proj.layers.length>6&&<span style={{fontSize:9,color:"var(--text-muted)"}}>+{proj.layers.length-6}</span>}
+                    {proj.layers.length>8&&<span style={{fontSize:10,color:"var(--text-muted)"}}>+{proj.layers.length-8}</span>}
                   </div>
                 )}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span style={{fontSize:10,color:"var(--accent)",fontWeight:600,letterSpacing:"0.06em"}}>
-                    OPEN →
-                  </span>
+                  <span style={{fontSize:12,color:"var(--accent)",fontWeight:700,letterSpacing:"0.04em"}}>Open →</span>
                   <button onClick={e=>deleteProject(proj.id,e)}
-                    disabled={deleting===proj.id}
                     style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",
-                      padding:4,opacity:0.5,transition:"opacity 0.15s"}}
+                      padding:4,opacity:0.4,transition:"opacity 0.15s"}}
                     onMouseEnter={e=>e.currentTarget.style.opacity="1"}
-                    onMouseLeave={e=>e.currentTarget.style.opacity="0.5"}>
-                    <Icon name="trash" size={13}/>
+                    onMouseLeave={e=>e.currentTarget.style.opacity="0.4"}>
+                    <Icon name="trash" size={14}/>
                   </button>
                 </div>
               </div>
@@ -765,326 +1326,310 @@ function ProjectsPage({ onOpen, theme, onThemeToggle }) {
           </div>
         )}
       </div>
-
-      {/* Footer */}
-      <div style={{borderTop:"1px solid var(--border)",padding:"20px 32px",
-        textAlign:"center",fontSize:10,color:"var(--text-muted)",letterSpacing:"0.08em"}}>
-        GEOCORE v4 · All data stored locally in your browser · No login required
+      <div style={{borderTop:"1px solid var(--border)",padding:"18px 32px",textAlign:"center",
+        fontSize:11,color:"var(--text-muted)",letterSpacing:"0.06em",fontFamily:"Inter,DM Sans,sans-serif"}}>
+        GeoCore v7 · Trinity Metals Spatial Intelligence · All data stored locally · No login required
       </div>
     </div>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════
-   DASHBOARD  (main app)
-═══════════════════════════════════════════════════════════ */
-function Dashboard({ project: initialProject, onBack, theme, onThemeToggle }) {
-  /* ── refs ── */
-  const mapRef        = useRef(null);
-  const mapDivRef     = useRef(null);
-  const tileRef       = useRef(null);
-  const geoLayerRef   = useRef(null);
-  const labelLayerRef = useRef(null);
-  const measureRef    = useRef(null);
-  const boundsTimer   = useRef(null);
-  const saveTimer     = useRef(null);
-  const dashRef       = useRef(null);
+/* ═══════════════════════════════════════════
+   DASHBOARD  (main editor + layout view)
+═══════════════════════════════════════════ */
+function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
+  const mapRef=useRef(null),mapDivRef=useRef(null),tileRef=useRef(null);
+  const geoLayerRef=useRef(null),labelLayerRef=useRef(null),measureRef=useRef(null);
+  const boundsTimer=useRef(null),saveTimer=useRef(null),dashRef=useRef(null);
 
-  /* ── project state ── */
-  const [project,      setProject]      = useState(initialProject);
-  const [layers,       setLayers]       = useState(initialProject.layers||[]);
-  const [activeLayer,  setActiveLayer]  = useState(initialProject.layers?.[0]||null);
-  const [visibleFeats, setVisibleFeats] = useState([]);
-  const [featureCount, setFeatureCount] = useState(0);
-  const [filters,      setFilters]      = useState(initialProject.filters||[]);
+  const [project]       =useState(initProject);
+  const [layers,setLayers]=useState(initProject.layers||[]);
+  const [filters,setFilters]=useState(initProject.filters||[]);
 
-  /* analytics - support multiple chart panels */
-  const [charts, setCharts] = useState(
-    initialProject.charts?.length ? initialProject.charts
-    : [{id:"c1", field:initialProject.chartField||"", type:initialProject.chartType||"bar"}]
+  // Per-layer visible features — keyed by String(layer.id)
+  const [visibleFeatsByLayer,setVisibleFeatsByLayer]=useState({});
+
+  // Sidebar charts — each is fully self-contained
+  const [sidebarCharts,setSidebarCharts]=useState(
+    initProject.sidebarCharts?.length
+      ? initProject.sidebarCharts
+      : [{id:"c1",layerId:null,field:"",chartType:"bar",chartMode:"count"}]
   );
 
-  /* symbology */
-  const [colorMap,   setColorMap]   = useState(initialProject.colorMap||{});
-  const [shapeMap,   setShapeMap]   = useState(initialProject.shapeMap||{});
-  const [opacityMap, setOpacityMap] = useState(initialProject.opacityMap||{});
+  // Symbology — per layer, per category value
+  const [customColorMap,setCustomColorMap]=useState(initProject.customColorMap||{});
+  const [customShapeMap,setCustomShapeMap]=useState(initProject.customShapeMap||{});
+  const [customOpacityMap,setCustomOpacityMap]=useState(initProject.customOpacityMap||{});
+  const [layerOpacity,setLayerOpacity]=useState(initProject.layerOpacity||{});
 
-  /* ui */
-  const [basemap,      setBasemap]      = useState(initialProject.basemap||"Satellite");
-  const [projectTitle, setProjectTitle] = useState(initialProject.name||"Untitled");
-  const [editTitle,    setEditTitle]    = useState(false);
-  const [logoUrl,      setLogoUrl]      = useState(initialProject.logoUrl||null);
-  const [loading,      setLoading]      = useState(false);
-  const [loadMsg,      setLoadMsg]      = useState("");
-  const [saving,       setSaving]       = useState(false);
-  const [sideOpen,     setSideOpen]     = useState(true);
-  const [basemapOpen,  setBasemapOpen]  = useState(false);
-  const [layerPanelOpen, setLayerPanelOpen] = useState(false);
-  const [symbolEditorOpen, setSymbolEditorOpen] = useState(false);
-  const [filterPanelOpen, setFilterPanelOpen]   = useState(false);
-  const [exportOpen,   setExportOpen]   = useState(false);
-  const [measureMode,  setMeasureMode]  = useState(null); // null | "distance" | "area"
-  const [measureResult,setMeasureResult]= useState("");
-  const [showLabels,   setShowLabels]   = useState(initialProject.showLabels||false);
-  const [labelField,   setLabelField]   = useState(initialProject.labelField||"");
-  const [coordDisplay, setCoordDisplay] = useState("---, ---");
-  const [activeChartField, setActiveChartField] = useState(charts[0]?.field||"");
+  // Which layer drives map symbology
+  const [primaryLayerId,setPrimaryLayerId]=useState(initProject.primaryLayerId||null);
+  const [primaryField,setPrimaryField]=useState(initProject.primaryField||"");
 
-  const logoInputRef = useRef(null);
-  const isDark = theme==="dark";
+  // Dashboard layout
+  const [layoutKey,setLayoutKey]=useState(initProject.layoutKey||"classic");
+  const [layoutSlots,setLayoutSlots]=useState(initProject.layoutSlots||{});
+  const [viewMode,setViewMode]=useState("editor"); // "editor" | "dashboard"
+  const [layoutPickerOpen,setLayoutPickerOpen]=useState(false);
 
-  /* ── CSS vars ── */
-  useEffect(()=>{
-    const vars=THEMES[theme];
-    Object.entries(vars).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
-  },[theme]);
+  // Map
+  const [basemap,setBasemap]=useState(initProject.basemap||"Satellite");
+  const [basemapOpen,setBasemapOpen]=useState(false);
+  const [measureMode,setMeasureMode]=useState(null);
+  const [measureResult,setMeasureResult]=useState("");
+  const [showLabels,setShowLabels]=useState(initProject.showLabels||false);
+  const [labelField,setLabelField]=useState(initProject.labelField||"");
 
-  /* ── Inject global CSS ── */
+  // UI
+  const [projectTitle,setProjectTitle]=useState(initProject.name||"Untitled");
+  const [editTitle,setEditTitle]=useState(false);
+  const [logoUrl,setLogoUrl]=useState(initProject.logoUrl||null);
+  const [loading,setLoading]=useState(false);
+  const [loadMsg,setLoadMsg]=useState("");
+  const [saving,setSaving]=useState(false);
+  const [layerPanelOpen,setLayerPanelOpen]=useState(false);
+  const [symbolEditorOpen,setSymbolEditorOpen]=useState(false);
+  const [filterPanelOpen,setFilterPanelOpen]=useState(false);
+  const [exportOpen,setExportOpen]=useState(false);
+  const [coordDisplay,setCoordDisplay]=useState("—");
+
+  const logoInputRef=useRef(null);
+  const isDark=theme==="dark";
+
+  // Active layer for editor sidebar (separate from map primary layer)
+  const activeLayer=useMemo(()=>layers.find(l=>String(l.id)===String(primaryLayerId))||layers[0],[layers,primaryLayerId]);
+  const geomType=useMemo(()=>detectGeomType(activeLayer?.geojson),[activeLayer]);
+  const fields=useMemo(()=>Object.keys(activeLayer?.geojson?.features?.[0]?.properties||{}),[activeLayer]);
+  const totalFeatures=useMemo(()=>layers.filter(l=>l.visible).reduce((s,l)=>s+(l.geojson?.features?.length||0),0),[layers]);
+  const totalVisible=Object.values(visibleFeatsByLayer).reduce((s,a)=>s+a.length,0);
+
+  /* CSS vars */
+  useEffect(()=>{Object.entries(THEMES[theme]).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));},[theme]);
+
+  /* Global CSS */
   useEffect(()=>{
     if(document.getElementById("geocore-css")) return;
-    const el=document.createElement("style");
-    el.id="geocore-css";
+    const el=document.createElement("style");el.id="geocore-css";
     el.textContent=`
       *{box-sizing:border-box;margin:0;padding:0}
       body,html,#root{height:100%;width:100%;overflow:hidden}
       .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:transparent!important;box-shadow:none!important}
       .leaflet-popup-content{margin:0!important}
-      .leaflet-control-zoom{border:1px solid var(--border)!important;border-radius:8px!important;overflow:hidden}
-      .leaflet-control-zoom a{background:var(--panel)!important;color:var(--text)!important;border-bottom:1px solid var(--border)!important}
-      .leaflet-control-zoom a:hover{background:var(--panel2)!important}
+      .leaflet-control-zoom{border:1.5px solid var(--border)!important;border-radius:10px!important;overflow:hidden;box-shadow:0 2px 8px var(--shadow)!important}
+      .leaflet-control-zoom a{background:var(--panel)!important;color:var(--text)!important;border-bottom:1px solid var(--border)!important;font-size:16px!important;line-height:30px!important;width:32px!important;height:32px!important}
+      .leaflet-control-zoom a:hover{background:var(--panel2)!important;color:var(--accent)!important}
       .leaflet-bar{border:none!important}
-      .geo-div-icon{background:none!important;border:none!important}
-      .geo-label{background:transparent!important;border:none!important;box-shadow:none!important}
+      .geo-div-icon,.geo-label{background:none!important;border:none!important;box-shadow:none!important}
+      .leaflet-control-scale-line{background:var(--panel)!important;color:var(--text-muted)!important;border-color:var(--border)!important;font-size:10px!important;font-family:Inter,DM Sans,sans-serif!important;padding:2px 6px!important}
       ::-webkit-scrollbar{width:4px;height:4px}
       ::-webkit-scrollbar-track{background:transparent}
-      ::-webkit-scrollbar-thumb{background:#44443f;border-radius:4px}
-      input[type=range]{-webkit-appearance:none;width:100%;height:3px;border-radius:3px;background:var(--border);outline:none}
-      input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);cursor:pointer}
+      ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+      ::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
+      input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:4px;background:var(--border);outline:none}
+      input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid var(--panel)}
       @keyframes spin{to{transform:rotate(360deg)}}
-      .leaflet-draw-toolbar a{background-color:var(--panel)!important;color:var(--text)!important;}
+      select{outline:none}
     `;
     document.head.appendChild(el);
   },[]);
 
-  /* ── Auto-save to IndexedDB (debounced 2s) ── */
-  const saveProject = useCallback(async (patch={}) => {
+  /* Auto-save */
+  const saveProject=useCallback(async()=>{
     setSaving(true);
-    const data = {
-      ...project, ...patch,
-      name:projectTitle, layers, filters, charts,
-      colorMap, shapeMap, opacityMap,
-      basemap, logoUrl, showLabels, labelField,
-      updatedAt: Date.now(),
-    };
-    try { await dbPut(data); } catch(e){ console.error("Save failed",e); }
-    finally { setSaving(false); }
-  },[project,projectTitle,layers,filters,charts,colorMap,shapeMap,opacityMap,basemap,logoUrl,showLabels,labelField]);
+    try{
+      await dbPut({...project,name:projectTitle,layers,filters,basemap,logoUrl,
+        showLabels,labelField,sidebarCharts,
+        customColorMap,customShapeMap,customOpacityMap,layerOpacity,
+        primaryLayerId,primaryField,layoutKey,layoutSlots,updatedAt:Date.now()});
+    }catch(e){console.error(e);}finally{setSaving(false);}
+  },[project,projectTitle,layers,filters,basemap,logoUrl,showLabels,labelField,
+     sidebarCharts,customColorMap,customShapeMap,customOpacityMap,layerOpacity,
+     primaryLayerId,primaryField,layoutKey,layoutSlots]);
 
-  useEffect(()=>{
-    clearTimeout(saveTimer.current);
-    saveTimer.current=setTimeout(()=>saveProject(),2000);
-  },[layers,filters,charts,colorMap,shapeMap,opacityMap,basemap,projectTitle,showLabels,labelField]);
+  useEffect(()=>{clearTimeout(saveTimer.current);saveTimer.current=setTimeout(saveProject,2000);},[
+    layers,filters,sidebarCharts,customColorMap,customShapeMap,customOpacityMap,layerOpacity,
+    basemap,projectTitle,showLabels,labelField,primaryLayerId,primaryField,layoutKey,layoutSlots]);
 
-  /* ── Init Leaflet ── */
+  /* Init Leaflet */
   useEffect(()=>{
     if(!mapDivRef.current||mapRef.current) return;
     const L=window.L;
-    const map=L.map(mapDivRef.current,{center:[0,20],zoom:3,zoomControl:false,preferCanvas:true});
+    const map=L.map(mapDivRef.current,{center:RWANDA.center,zoom:RWANDA.zoom,zoomControl:false,preferCanvas:true});
     tileRef.current=L.tileLayer(BASEMAPS[basemap],{maxZoom:20}).addTo(map);
-    mapRef.current=map;
-
-    // Scale bar
     L.control.scale({imperial:false,position:"bottomleft"}).addTo(map);
-
-    // Coordinate display
-    map.on("mousemove",e=>{
-      setCoordDisplay(`${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`);
-    });
-
-    // Bounds change
-    map.on("moveend zoomend",()=>{
-      clearTimeout(boundsTimer.current);
-      boundsTimer.current=setTimeout(()=>updateVisible(map.getBounds()),130);
-    });
+    map.on("mousemove",e=>setCoordDisplay(`${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`));
+    map.on("moveend zoomend",()=>{clearTimeout(boundsTimer.current);boundsTimer.current=setTimeout(()=>updateAllVisible(map.getBounds()),130);});
+    mapRef.current=map;
   },[]);
 
-  /* ── Basemap switch ── */
+  /* Basemap */
   useEffect(()=>{
     if(!mapRef.current||!tileRef.current) return;
     tileRef.current.remove();
     tileRef.current=window.L.tileLayer(BASEMAPS[basemap],{maxZoom:20}).addTo(mapRef.current);
   },[basemap]);
 
-  /* ── Measure tool ── */
+  /* Measure */
   useEffect(()=>{
     if(!mapRef.current) return;
-    const L=window.L; const map=mapRef.current;
-    if(measureRef.current){map.off("click",measureRef.current.handler);if(measureRef.current.layer)measureRef.current.layer.remove();}
-    if(!measureMode){setMeasureResult("");measureRef.current=null;return;}
-
-    const pts=[]; let layer=null;
-    const handler=e=>{
-      pts.push(e.latlng);
-      if(layer) layer.remove();
+    const L=window.L,map=mapRef.current;
+    if(measureRef.current){map.off("click",measureRef.current.fn);measureRef.current?.layer?.remove();}
+    if(!measureMode){setMeasureResult("");measureRef.current=null;map.getContainer().style.cursor="";return;}
+    const pts=[];let layer=null;
+    const fn=e=>{
+      pts.push(e.latlng);if(layer)layer.remove();
       if(measureMode==="distance"){
-        layer=L.polyline(pts,{color:"#E8B84B",weight:2.5,dashArray:"6 4"}).addTo(map);
-        if(pts.length>1){
-          let d=0;for(let i=1;i<pts.length;i++) d+=pts[i-1].distanceTo(pts[i]);
-          setMeasureResult(d>1000?`${(d/1000).toFixed(2)} km`:`${d.toFixed(0)} m`);
-        }
-      } else {
-        layer=L.polygon(pts,{color:"#E8B84B",weight:2,fillColor:"#E8B84B",fillOpacity:0.15}).addTo(map);
+        layer=L.polyline(pts,{color:"#C8922A",weight:3,dashArray:"8 5"}).addTo(map);
+        if(pts.length>1){let d=0;for(let i=1;i<pts.length;i++)d+=pts[i-1].distanceTo(pts[i]);
+          setMeasureResult(d>1000?`${(d/1000).toFixed(2)} km`:`${Math.round(d)} m`);}
+      }else{
+        layer=L.polygon(pts,{color:"#C8922A",weight:2,fillColor:"#C8922A",fillOpacity:0.12}).addTo(map);
         if(pts.length>2){
-          const area=L.GeometryUtil?.geodesicArea?.(pts)||0;
-          setMeasureResult(area>1000000?`${(area/1000000).toFixed(3)} km²`:`${area.toFixed(0)} m²`);
+          let a=0;const n=pts.length;
+          for(let i=0;i<n;i++){const p1=pts[i],p2=pts[(i+1)%n];
+            a+=p1.lng*Math.PI/180*Math.sin(p2.lat*Math.PI/180)-p2.lng*Math.PI/180*Math.sin(p1.lat*Math.PI/180);}
+          const am=Math.abs(a)*6371008.8**2/2;
+          setMeasureResult(am>=1e6?`${(am/1e6).toFixed(3)} km²`:am>=1e4?`${(am/1e4).toFixed(2)} ha`:`${Math.round(am)} m²`);
         }
       }
       measureRef.current={...measureRef.current,layer};
     };
-    map.on("click",handler);
-    measureRef.current={handler,layer:null,pts};
+    map.on("click",fn);measureRef.current={fn,layer:null};
     map.getContainer().style.cursor="crosshair";
-    return ()=>{ map.off("click",handler); map.getContainer().style.cursor=""; if(layer)layer.remove(); };
+    return()=>{map.off("click",fn);layer?.remove();map.getContainer().style.cursor="";};
   },[measureMode]);
 
-  /* ── Filter features ── */
-  const applyFilters = useCallback((features) => {
+  /* Filters */
+  const applyFilters=useCallback(features=>{
     if(!filters.length) return features;
-    return features.filter(f=>{
-      return filters.every(fi=>{
-        const val=String(f.properties?.[fi.field]??"");
-        if(fi.op==="=")        return val===fi.val;
-        if(fi.op==="≠")        return val!==fi.val;
-        if(fi.op==="contains") return val.toLowerCase().includes(fi.val.toLowerCase());
-        if(fi.op==="starts")   return val.toLowerCase().startsWith(fi.val.toLowerCase());
-        return true;
-      });
-    });
+    return features.filter(f=>filters.every(fi=>{
+      const v=String(f.properties?.[fi.field]??"");
+      if(fi.op==="=")return v===fi.val;if(fi.op==="≠")return v!==fi.val;
+      if(fi.op==="contains")return v.toLowerCase().includes(fi.val.toLowerCase());
+      if(fi.op==="starts")return v.toLowerCase().startsWith(fi.val.toLowerCase());
+      return true;
+    }));
   },[filters]);
 
-  /* ── Visible features ── */
-  const updateVisible=useCallback((bounds)=>{
-    if(!activeLayer?.geojson) return;
-    const raw=(activeLayer.geojson.features||[]).filter(f=>{
-      if(!f.geometry) return false;
-      const c=f.geometry.coordinates,gt=f.geometry.type;
-      if(gt==="Point")          return bounds.contains([c[1],c[0]]);
-      if(gt==="MultiPoint")     return c.some(p=>bounds.contains([p[1],p[0]]));
-      if(gt==="LineString")     return c.some(p=>bounds.contains([p[1],p[0]]));
-      if(gt==="MultiLineString")return c.flat().some(p=>bounds.contains([p[1],p[0]]));
-      if(gt==="Polygon")        return c[0].some(p=>bounds.contains([p[1],p[0]]));
-      if(gt==="MultiPolygon")   return c.flat(2).some(p=>bounds.contains([p[1],p[0]]));
-      return true;
+  /* Update visible features for ALL layers independently */
+  const updateAllVisible=useCallback(bounds=>{
+    const result={};
+    layers.forEach(layer=>{
+      if(!layer.geojson) return;
+      const raw=(layer.geojson.features||[]).filter(f=>{
+        if(!f.geometry) return false;
+        const c=f.geometry.coordinates,gt=f.geometry.type;
+        if(gt==="Point")return bounds.contains([c[1],c[0]]);
+        if(gt==="MultiPoint")return c.some(p=>bounds.contains([p[1],p[0]]));
+        if(gt==="LineString")return c.some(p=>bounds.contains([p[1],p[0]]));
+        if(gt==="MultiLineString")return c.flat().some(p=>bounds.contains([p[1],p[0]]));
+        if(gt==="Polygon")return c[0].some(p=>bounds.contains([p[1],p[0]]));
+        if(gt==="MultiPolygon")return c.flat(2).some(p=>bounds.contains([p[1],p[0]]));
+        return true;
+      });
+      result[String(layer.id)]=applyFilters(raw);
     });
-    const filtered=applyFilters(raw);
-    setVisibleFeats(filtered);
-    setFeatureCount(filtered.length);
-  },[activeLayer,applyFilters]);
+    setVisibleFeatsByLayer(result);
+  },[layers,applyFilters]);
 
   useEffect(()=>{
-    if(!mapRef.current||!activeLayer){setVisibleFeats([]);setFeatureCount(0);return;}
-    updateVisible(mapRef.current.getBounds());
-  },[activeLayer,updateVisible,filters]);
+    if(!mapRef.current) return;
+    updateAllVisible(mapRef.current.getBounds());
+  },[layers,applyFilters]);
 
-  /* ── Auto colorMap + shapeMap on field change ── */
-  const primaryField = charts[0]?.field || "";
-  useEffect(()=>{
-    if(!activeLayer?.geojson||!primaryField) return;
-    const vals=[...new Set((activeLayer.geojson.features||[]).map(f=>String(f.properties?.[primaryField]??"N/A")))];
-    setColorMap(prev=>{const n={};vals.forEach((v,i)=>{n[v]=prev[v]||PALETTE[i%PALETTE.length];});return n;});
-    setShapeMap(prev=>{const n={};vals.forEach((v,i)=>{n[v]=prev[v]||SHAPES[i%SHAPES.length];});return n;});
-    setOpacityMap(prev=>{const n={};vals.forEach(v=>{n[v]=prev[v]??0.7;});return n;});
-  },[activeLayer,primaryField]);
-
-  /* ── Redraw map layer ── */
+  /* Redraw map */
   useEffect(()=>{
     if(!mapRef.current) return;
     const L=window.L;
     if(geoLayerRef.current){geoLayerRef.current.remove();geoLayerRef.current=null;}
     if(labelLayerRef.current){labelLayerRef.current.remove();labelLayerRef.current=null;}
+    const vis=layers.filter(l=>l.visible);if(!vis.length) return;
 
-    const vis=layers.filter(l=>l.visible);
-    if(!vis.length) return;
+    // Build color map for primary layer on the fly
+    const primaryLayer=layers.find(l=>String(l.id)===String(primaryLayerId))||layers[0];
+    const baseColors=buildColorMap(primaryLayer?.geojson?.features||[],primaryField);
+    const mergedColors={...baseColors,...customColorMap};
 
-    const allFeatures=vis.flatMap(l=>(l.geojson?.features||[]).map(f=>({...f,_lid:l.id,_lcolor:l.color})));
-    const toRender=applyFilters(allFeatures);
+    const allFeats=vis.flatMap(l=>(l.geojson?.features||[]).map(f=>({
+      ...f,_lid:l.id,_lcolor:l.color,_lgeom:l.geomType||"Point",
+      _isPrimary:String(l.id)===String(primaryLayer?.id),
+    })));
+    const toRender=applyFilters(allFeats);
 
     geoLayerRef.current=L.geoJSON({type:"FeatureCollection",features:toRender},{
       style:f=>{
-        const val=primaryField&&f.properties?.[primaryField]?String(f.properties[primaryField]):null;
-        const col=(val&&colorMap[val])||f._lcolor||"#E8B84B";
-        const opacity=val?(opacityMap[val]??0.7):0.7;
-        return{color:col,weight:2.2,fillColor:col,fillOpacity:opacity,opacity:0.9};
+        const val=f._isPrimary&&primaryField&&f.properties?.[primaryField]?String(f.properties[primaryField]):null;
+        const col=(val&&mergedColors[val])||f._lcolor||"#C8922A";
+        const opacity=val?(customOpacityMap[val]??0.85):0.85;
+        const lop=layerOpacity[f._lid]??1;
+        return{color:col,weight:f._lgeom==="Line"?2.5:1.5,fillColor:col,fillOpacity:opacity*lop,opacity:lop};
       },
       pointToLayer:(f,latlng)=>{
-        const val=primaryField&&f.properties?.[primaryField]?String(f.properties[primaryField]):null;
-        const col=(val&&colorMap[val])||f._lcolor||"#E8B84B";
-        const shape=(val&&shapeMap[val])||"circle";
+        const val=f._isPrimary&&primaryField&&f.properties?.[primaryField]?String(f.properties[primaryField]):null;
+        const col=(val&&mergedColors[val])||f._lcolor||"#C8922A";
+        const shape=(val&&customShapeMap[val])||"circle";
         return L.marker(latlng,{
-          icon:L.divIcon({html:makeIconSVG(shape,col,16),className:"geo-div-icon",iconSize:[16,16],iconAnchor:[8,8]}),
+          icon:L.divIcon({html:makePointSVG(shape,col,16),className:"geo-div-icon",iconSize:[16,16],iconAnchor:[8,8]}),
+          opacity:layerOpacity[f._lid]??1,
         });
       },
       onEachFeature:(f,layer)=>{
         const props=f.properties||{};
-        const rows=Object.entries(props).slice(0,12).map(([k,v])=>
-          `<div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid #252523">
-            <span style="color:#888;min-width:90px;font-size:10px;flex-shrink:0">${k}</span>
-            <span style="color:#ccc;font-size:10px;word-break:break-all">${String(v)}</span>
-          </div>`
-        ).join("");
+        const rows=Object.entries(props).filter(([k])=>!k.startsWith("_")).slice(0,12).map(([k,v])=>
+          `<div style="display:flex;gap:10px;padding:4px 0;border-bottom:1px solid #ddd8cc">
+            <span style="color:#5a6e85;min-width:90px;font-size:11px;flex-shrink:0;font-family:Inter,sans-serif">${k}</span>
+            <span style="color:#1A2B4A;font-size:11px;word-break:break-all;font-family:Inter,sans-serif">${String(v)}</span>
+          </div>`).join("");
         layer.bindPopup(
-          `<div style="background:#1a1a18;border:1px solid #333;border-radius:8px;padding:12px;min-width:220px;font-family:monospace">
-            <div style="color:#E8B84B;font-weight:700;margin-bottom:8px;font-size:11px;letter-spacing:.08em">FEATURE PROPERTIES</div>
-            ${rows}
-          </div>`,{maxWidth:300,className:"geo-popup"}
+          `<div style="background:#fff;border:1.5px solid #d8d3c8;border-radius:10px;padding:14px;min-width:220px">
+            <div style="color:#C8922A;font-weight:700;margin-bottom:10px;font-size:12px;font-family:Inter,sans-serif;letter-spacing:.04em">FEATURE PROPERTIES</div>
+            ${rows||"<span style='color:#888;font-size:11px'>No properties</span>"}
+          </div>`,{maxWidth:320,className:"geo-popup"}
         );
       },
     }).addTo(mapRef.current);
 
-    /* Labels */
-    if(showLabels&&labelField) {
-      const labelLayer=L.layerGroup();
+    /* Labels — FIX: use iconSize:null so div sizes itself naturally */
+    if(showLabels&&labelField){
+      const lg=L.layerGroup();
       toRender.forEach(f=>{
-        const lbl=f.properties?.[labelField];
-        if(!lbl) return;
+        const lbl=f.properties?.[labelField];if(!lbl) return;
         let latlng=null;
-        try {
-          const gt=f.geometry.type;
-          if(gt==="Point") latlng=L.latLng(f.geometry.coordinates[1],f.geometry.coordinates[0]);
-          else if(gt==="Polygon") latlng=L.geoJSON(f).getBounds().getCenter();
-          else if(gt==="MultiPolygon") latlng=L.geoJSON(f).getBounds().getCenter();
-        } catch{}
+        try{const gt=f.geometry?.type;
+          if(gt==="Point")latlng=L.latLng(f.geometry.coordinates[1],f.geometry.coordinates[0]);
+          else latlng=L.geoJSON(f).getBounds().getCenter();
+        }catch{}
         if(!latlng) return;
         L.marker(latlng,{
           icon:L.divIcon({
-            html:`<div style="background:rgba(14,14,12,0.82);color:#E8B84B;font-size:10px;padding:2px 6px;border-radius:4px;white-space:nowrap;border:1px solid rgba(232,184,75,0.3);font-family:monospace;pointer-events:none">${lbl}</div>`,
-            className:"geo-label",iconAnchor:[0,-10],
-          }),
-          interactive:false,
-        }).addTo(labelLayer);
+            // No iconSize constraint — div sizes to content, fixing label truncation
+            html:`<div style="display:inline-block;background:rgba(26,43,74,0.88);color:#C8922A;font-size:10px;line-height:1.4;padding:3px 8px;border-radius:5px;white-space:nowrap;border:1px solid rgba(200,146,42,0.4);font-family:Inter,DM Sans,sans-serif;pointer-events:none;font-weight:600">${String(lbl)}</div>`,
+            className:"geo-label",
+            iconSize:null,   // ← KEY FIX: let the div size itself
+            iconAnchor:[0,20],
+          }),interactive:false,
+        }).addTo(lg);
       });
-      labelLayer.addTo(mapRef.current);
-      labelLayerRef.current=labelLayer;
+      lg.addTo(mapRef.current);labelLayerRef.current=lg;
     }
-  },[layers,colorMap,shapeMap,opacityMap,primaryField,showLabels,labelField,applyFilters]);
+  },[layers,customColorMap,customShapeMap,customOpacityMap,layerOpacity,
+     primaryLayerId,primaryField,showLabels,labelField,applyFilters]);
 
-  /* ── Fit bounds on new layer ── */
+  /* Fit to active layer */
   useEffect(()=>{
     if(!mapRef.current||!activeLayer?.geojson?.features?.length) return;
     try{const b=window.L.geoJSON(activeLayer.geojson).getBounds();if(b.isValid())mapRef.current.fitBounds(b,{padding:[40,40]});}catch{}
   },[activeLayer?.id]);
 
-  /* ── File processing ── */
-  const processFile=async(file)=>{
+  /* File upload */
+  const processFile=async file=>{
     const ext=file.name.split(".").pop().toLowerCase();
     const name=file.name.replace(/\.[^.]+$/,"");
     setLoadMsg(`Parsing ${file.name}…`);
     let geojson;
-    if(ext==="zip"){
-      geojson=await window.shp(await file.arrayBuffer());
-    } else if(ext==="geojson"||ext==="json"){
-      geojson=JSON.parse(await file.text());
-    } else if(ext==="csv"){
+    if(ext==="zip") geojson=await window.shp(await file.arrayBuffer());
+    else if(ext==="geojson"||ext==="json") geojson=JSON.parse(await file.text());
+    else if(ext==="csv"){
       const res=window.Papa.parse(await file.text(),{header:true,dynamicTyping:true,skipEmptyLines:true});
       const latK=["lat","latitude","y","LAT","LATITUDE"].find(k=>res.meta.fields?.includes(k));
       const lonK=["lon","lng","longitude","x","LON","LNG","LONGITUDE"].find(k=>res.meta.fields?.includes(k));
@@ -1093,26 +1638,31 @@ function Dashboard({ project: initialProject, onBack, theme, onThemeToggle }) {
         type:"Feature",properties:d,geometry:{type:"Point",coordinates:[+d[lonK],+d[latK]]},
       }))};
     } else throw new Error("Unsupported: "+ext);
-
-    // Strip geometry from serialized layer (store only properties for IndexedDB size limit)
-    const stripped={...geojson,features:geojson.features.map(f=>({...f}))};
-    return{id:Date.now()+Math.random(),name,geojson:stripped,visible:true,color:PALETTE[layers.length%PALETTE.length]};
+    const gType=detectGeomType(geojson);
+    return{id:Date.now()+Math.random(),name,geojson,visible:true,geomType:gType,
+      color:CHART_PALETTE[layers.length%CHART_PALETTE.length]};
   };
 
-  const handleUpload=async(e)=>{
-    const files=Array.from(e.target.files);
-    if(!files.length) return;
+  const handleUpload=async e=>{
+    const files=Array.from(e.target.files);if(!files.length) return;
     setLoading(true);
     try{
       for(const file of files){
         const layer=await processFile(file);
+        // Use functional state update to avoid stale closure
         setLayers(prev=>{
           const next=[...prev,layer];
-          setActiveLayer(layer);
-          const f0=Object.keys(layer.geojson?.features?.[0]?.properties||{})[0];
-          if(f0){
-            setCharts(prev2=>prev2.map((c,i)=>i===0?{...c,field:f0}:c));
-            setLabelField(f0);
+          // Set primary layer to first upload
+          if(prev.length===0){
+            setPrimaryLayerId(String(layer.id));
+            const f0=Object.keys(layer.geojson?.features?.[0]?.properties||{})[0];
+            if(f0){
+              setPrimaryField(f0);
+              setLabelField(f0);
+              const defaultMode=layer.geomType==="Polygon"?"area":"count";
+              setSidebarCharts(pc=>pc.map((c,i)=>i===0
+                ?{...c,layerId:String(layer.id),field:f0,chartMode:defaultMode}:c));
+            }
           }
           return next;
         });
@@ -1121,449 +1671,421 @@ function Dashboard({ project: initialProject, onBack, theme, onThemeToggle }) {
     finally{setLoading(false);setLoadMsg("");e.target.value="";}
   };
 
-  const toggleLayer=id=>setLayers(prev=>prev.map(l=>l.id===id?{...l,visible:!l.visible}:l));
-  const removeLayer=id=>{setLayers(prev=>{const next=prev.filter(l=>l.id!==id);if(activeLayer?.id===id)setActiveLayer(next[0]||null);return next;});};
+  const toggleLayer=id=>setLayers(p=>p.map(l=>l.id===id?{...l,visible:!l.visible}:l));
+  const removeLayer=id=>setLayers(p=>p.filter(l=>l.id!==id));
 
-  const addChart=()=>{
-    if(charts.length>=3) return;
-    const f=Object.keys(activeLayer?.geojson?.features?.[0]?.properties||{})[0]||"";
-    setCharts(prev=>[...prev,{id:"c"+Date.now(),field:f,type:"bar"}]);
+  const addSidebarChart=()=>{
+    if(sidebarCharts.length>=4) return;
+    const l=layers[0];
+    const f=Object.keys(l?.geojson?.features?.[0]?.properties||{})[0]||"";
+    setSidebarCharts(p=>[...p,{id:"c"+Date.now(),layerId:l?String(l.id):null,
+      field:f,chartType:"bar",chartMode:l?.geomType==="Polygon"?"area":"count"}]);
   };
-  const removeChart=id=>setCharts(prev=>prev.filter(c=>c.id!==id));
-  const updateChart=(id,patch)=>setCharts(prev=>prev.map(c=>c.id===id?{...c,...patch}:c));
+  const removeSidebarChart=id=>setSidebarCharts(p=>p.filter(c=>c.id!==id));
+  const updateSidebarChart=(id,patch)=>setSidebarCharts(p=>p.map(c=>c.id===id?{...c,...patch}:c));
 
-  const fields=useMemo(()=>Object.keys(activeLayer?.geojson?.features?.[0]?.properties||{}),[activeLayer]);
-  const totalFeatures=useMemo(()=>layers.filter(l=>l.visible).reduce((s,l)=>s+(l.geojson?.features?.length||0),0),[layers]);
+  const updateSlot=(slotKey,cfg)=>setLayoutSlots(p=>({...p,[slotKey]:cfg}));
 
-  /* ════════════════════ RENDER ════════════════════ */
-  return (
-    <div ref={dashRef} style={{display:"flex",flexDirection:"column",height:"100vh",
-      background:"var(--bg)",fontFamily:"'DM Mono','Courier New',monospace",
-      color:"var(--text)",transition:"background 0.2s,color 0.2s"}}>
+  // Initialise layout slots when layout changes
+  useEffect(()=>{
+    const defaultSlotContent={
+      classic:{sidebar:{type:"chart"},map:{type:"map"}},
+      dual:{left:{type:"chart"},map:{type:"map"},right:{type:"chart"}},
+      grid:{tl:{type:"chart"},tr:{type:"map"},bl:{type:"chart"},br:{type:"legend"}},
+      focus:{map:{type:"map"},c1:{type:"chart"},c2:{type:"chart"},c3:{type:"legend"}},
+    };
+    setLayoutSlots(prev=>{
+      const defaults=defaultSlotContent[layoutKey]||{};
+      const merged={};
+      Object.keys(defaults).forEach(k=>{merged[k]=prev[k]||{...defaults[k],
+        layerId:layers[0]?String(layers[0].id):null,
+        field:Object.keys(layers[0]?.geojson?.features?.[0]?.properties||{})[0]||"",
+        chartType:"bar",chartMode:layers[0]?.geomType==="Polygon"?"area":"count"};});
+      return merged;
+    });
+  },[layoutKey]);
 
-      {/* ═══ TOPBAR ═══ */}
-      <header style={{height:52,background:"var(--panel)",borderBottom:"1px solid var(--border)",
-        display:"flex",alignItems:"center",padding:"0 12px",flexShrink:0,zIndex:100,gap:10}}>
+  /* Map props bundled for MapPanel */
+  const mapProps={mapDivRef,layers,visibleFeatsByLayer,customColorMap,customShapeMap,customOpacityMap,
+    layerOpacity,primaryLayerId,primaryField,applyFilters,basemap,showLabels,labelField,
+    measureMode,setMeasureMode,measureResult,setMeasureResult,
+    basemapOpen,setBasemapOpen,setBasemap,mapRef};
 
-        {/* Back */}
+  /* ═══ RENDER ═══ */
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100vh",
+      background:"var(--bg)",fontFamily:"Inter,DM Sans,sans-serif",color:"var(--text)"}}>
+
+      {/* TOPBAR */}
+      <header style={{height:54,background:"var(--panel)",borderBottom:"1.5px solid var(--border)",
+        display:"flex",alignItems:"center",padding:"0 14px",flexShrink:0,zIndex:100,gap:10,
+        boxShadow:"0 2px 10px var(--shadow)"}}>
         <button onClick={onBack} title="Back to projects"
-          style={{width:32,height:32,borderRadius:7,background:"var(--panel2)",
-            border:"1px solid var(--border)",cursor:"pointer",display:"flex",
+          style={{width:34,height:34,borderRadius:9,background:"var(--panel2)",
+            border:"1.5px solid var(--border)",cursor:"pointer",display:"flex",
             alignItems:"center",justifyContent:"center",color:"var(--text-muted)",flexShrink:0}}>
           <Icon name="back" size={15}/>
         </button>
-
-        {/* Logo */}
-        <div onClick={()=>logoInputRef.current?.click()} style={{cursor:"pointer",flexShrink:0}}>
+        <div onClick={()=>logoInputRef.current?.click()} style={{cursor:"pointer",flexShrink:0}} title="Upload logo">
           {logoUrl
-            ?<img src={logoUrl} alt="logo" style={{height:30,maxWidth:80,objectFit:"contain",borderRadius:4}}/>
-            :<div style={{width:30,height:30,borderRadius:6,border:"1px dashed var(--border)",
-                display:"flex",alignItems:"center",justifyContent:"center",opacity:0.4}}>
-                <Icon name="image" size={13} color="var(--text-muted)"/>
+            ?<img src={logoUrl} alt="logo" style={{height:32,maxWidth:90,objectFit:"contain",borderRadius:6}}/>
+            :<div style={{width:32,height:32,borderRadius:8,border:"1.5px dashed var(--border)",
+                display:"flex",alignItems:"center",justifyContent:"center",opacity:0.5,background:"var(--panel2)"}}>
+                <Icon name="image" size={14} color="var(--text-muted)"/>
               </div>
           }
           <input ref={logoInputRef} type="file" accept="image/*" hidden onChange={e=>{
             const f=e.target.files?.[0];if(f)setLogoUrl(URL.createObjectURL(f));
           }}/>
         </div>
-
         <div style={{width:1,height:22,background:"var(--border)",flexShrink:0}}/>
-
-        {/* Title */}
         {editTitle
           ?<input autoFocus value={projectTitle} onChange={e=>setProjectTitle(e.target.value)}
               onBlur={()=>setEditTitle(false)} onKeyDown={e=>e.key==="Enter"&&setEditTitle(false)}
               style={{background:"transparent",border:"none",outline:"none",color:"var(--text)",
-                fontFamily:"inherit",fontSize:13,fontWeight:600,letterSpacing:"0.04em",width:220}}/>
+                fontFamily:"inherit",fontSize:14,fontWeight:700,width:240}}/>
           :<span onClick={()=>setEditTitle(true)} title="Click to edit"
-              style={{fontSize:13,fontWeight:600,letterSpacing:"0.04em",cursor:"text",
-                color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:240}}>
+              style={{fontSize:14,fontWeight:700,cursor:"text",color:"var(--text)",
+                whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:260}}>
               {projectTitle}
             </span>
         }
-
-        {/* Save indicator */}
-        {saving&&<span style={{fontSize:9,color:"var(--text-muted)",letterSpacing:"0.08em",flexShrink:0}}>SAVING…</span>}
+        {saving&&<span style={{fontSize:10,color:"var(--text-muted)",flexShrink:0,fontStyle:"italic"}}>saving…</span>}
 
         {/* Stats */}
-        <div style={{display:"flex",gap:20,alignItems:"center",marginLeft:"auto"}}>
-          {[["Layers",layers.length],["Features",totalFeatures.toLocaleString()],["Visible",featureCount.toLocaleString()]].map(([lbl,val])=>(
-            <div key={lbl} style={{textAlign:"center"}}>
-              <div style={{fontSize:15,fontWeight:700,color:"var(--accent)",lineHeight:1}}>{val}</div>
-              <div style={{fontSize:8,color:"var(--text-muted)",letterSpacing:"0.1em",marginTop:1}}>{lbl.toUpperCase()}</div>
+        <div style={{display:"flex",gap:24,alignItems:"center",margin:"0 auto"}}>
+          {[["Layers",layers.length],["Total",totalFeatures.toLocaleString()],["Visible",totalVisible.toLocaleString()]].map(([l,v])=>(
+            <div key={l} style={{textAlign:"center"}}>
+              <div style={{fontSize:16,fontWeight:800,color:"var(--accent)",lineHeight:1}}>{v}</div>
+              <div style={{fontSize:9,color:"var(--text-muted)",letterSpacing:"0.08em",marginTop:2,fontWeight:600}}>{l.toUpperCase()}</div>
             </div>
           ))}
         </div>
 
-        {/* Right actions */}
-        <div style={{display:"flex",gap:6,alignItems:"center",marginLeft:"auto",flexShrink:0}}>
+        {/* Actions */}
+        <div style={{display:"flex",gap:7,alignItems:"center",flexShrink:0}}>
           {loading&&(
-            <div style={{display:"flex",alignItems:"center",gap:6,fontSize:10,color:"var(--text-muted)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--text-muted)"}}>
               <div style={{width:13,height:13,border:"2px solid var(--accent)",borderTopColor:"transparent",
                 borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
               {loadMsg}
             </div>
           )}
           <button onClick={onThemeToggle}
-            style={{width:32,height:32,borderRadius:7,background:"var(--panel2)",border:"1px solid var(--border)",
-              cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-muted)"}}>
+            style={{width:34,height:34,borderRadius:9,background:"var(--panel2)",
+              border:"1.5px solid var(--border)",cursor:"pointer",display:"flex",
+              alignItems:"center",justifyContent:"center",color:"var(--text-muted)"}}>
             <Icon name={isDark?"sun":"moon"} size={14}/>
           </button>
-          <button onClick={()=>setExportOpen(true)}
-            style={{height:32,padding:"0 12px",borderRadius:7,background:"var(--panel2)",
-              border:"1px solid var(--border)",cursor:"pointer",display:"flex",alignItems:"center",
-              gap:5,color:"var(--text)",fontSize:10,fontFamily:"inherit",fontWeight:600}}>
-            <Icon name="export" size={13}/> EXPORT
-          </button>
-          <button onClick={()=>setLayerPanelOpen(p=>!p)}
-            style={{height:32,padding:"0 12px",borderRadius:7,
-              background:layerPanelOpen?"var(--panel2)":"transparent",
-              border:"1px solid var(--border)",cursor:"pointer",display:"flex",alignItems:"center",
-              gap:5,color:"var(--text)",fontSize:10,fontFamily:"inherit",fontWeight:600}}>
-            <Icon name="layers" size={13}/> LAYERS
-          </button>
-          <label style={{display:"flex",alignItems:"center",gap:5,background:"var(--accent)",
-            color:"#0e0e0c",padding:"0 12px",height:32,borderRadius:7,cursor:"pointer",
-            fontSize:10,fontWeight:700,letterSpacing:"0.07em",whiteSpace:"nowrap"}}>
-            <Icon name="upload" size={13} color="#0e0e0c"/> ADD DATA
+          {/* View toggle */}
+          <Btn onClick={()=>setViewMode(p=>p==="editor"?"dashboard":"editor")}
+            active={viewMode==="dashboard"}
+            title={viewMode==="editor"?"Switch to Dashboard View":"Switch to Editor"}>
+            <Icon name={viewMode==="editor"?"view":"edit2"} size={13}
+              color={viewMode==="dashboard"?"#fff":"var(--text-muted)"}/>
+            {viewMode==="editor"?"Dashboard View":"Editor"}
+          </Btn>
+          {viewMode==="dashboard"&&(
+            <Btn onClick={()=>setLayoutPickerOpen(true)} title="Change layout">
+              <Icon name="layout" size={13} color="var(--text-muted)"/>
+              {LAYOUT_TEMPLATES[layoutKey]?.label||"Layout"}
+            </Btn>
+          )}
+          <Btn onClick={()=>setExportOpen(true)}>
+            <Icon name="export" size={13} color="var(--text-muted)"/> Export
+          </Btn>
+          <Btn onClick={()=>setLayerPanelOpen(p=>!p)} active={layerPanelOpen}>
+            <Icon name="layers" size={13} color={layerPanelOpen?"#fff":"var(--text-muted)"}/> Layers
+          </Btn>
+          <label style={{display:"flex",alignItems:"center",gap:6,background:"var(--accent)",
+            color:"#fff",padding:"0 14px",height:36,borderRadius:10,cursor:"pointer",
+            fontSize:12,fontWeight:700,letterSpacing:"0.04em",whiteSpace:"nowrap",
+            boxShadow:"0 4px 12px rgba(200,146,42,0.35)"}}>
+            <Icon name="upload" size={14} color="#fff"/> Add Data
             <input type="file" multiple hidden accept=".zip,.geojson,.json,.csv" onChange={handleUpload}/>
           </label>
         </div>
       </header>
 
-      {/* ═══ BODY ═══ */}
+      {/* BODY */}
       <div style={{display:"flex",flex:1,overflow:"hidden",position:"relative"}}>
-
-        {/* ── SIDEBAR ── */}
-        <div style={{width:sideOpen?330:0,minWidth:0,transition:"width 0.28s ease",
-          background:"var(--panel)",borderRight:"1px solid var(--border)",
-          display:"flex",flexDirection:"column",overflow:"hidden",flexShrink:0}}>
-          <div style={{width:330,height:"100%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
-
-            {/* Sidebar header */}
-            <div style={{padding:"9px 14px",borderBottom:"1px solid var(--border)",
-              display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-              <div style={{display:"flex",alignItems:"center",gap:7}}>
-                <Icon name="chart" size={13} color="var(--accent)"/>
-                <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:"var(--text-muted)"}}>ANALYTICS</span>
+        {viewMode==="dashboard"?(
+          /* ═══ DASHBOARD LAYOUT VIEW ═══ */
+          <div ref={dashRef} style={{flex:1,overflow:"hidden"}}>
+            <LayoutView
+              layoutKey={layoutKey}
+              slots={layoutSlots}
+              onSlotChange={updateSlot}
+              layers={layers}
+              visibleFeatsByLayer={visibleFeatsByLayer}
+              mapProps={mapProps}
+              isDark={isDark}
+              dashRef={dashRef}
+            />
+          </div>
+        ):(
+          /* ═══ EDITOR VIEW ═══ */
+          <>
+            {/* Sidebar */}
+            <div style={{width:380,flexShrink:0,background:"var(--panel)",
+              borderRight:"1.5px solid var(--border)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+              {/* Sidebar header */}
+              <div style={{padding:"10px 16px",borderBottom:"1.5px solid var(--border)",
+                display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <Icon name="chart" size={15} color="var(--accent)"/>
+                  <span style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>Analytics</span>
+                </div>
+                <div style={{display:"flex",gap:6}}>
+                  {layers.length>0&&(
+                    <button onClick={()=>setSymbolEditorOpen(true)}
+                      style={{display:"flex",alignItems:"center",gap:5,background:"var(--panel2)",
+                        border:"1.5px solid var(--border)",borderRadius:7,padding:"4px 10px",
+                        cursor:"pointer",fontSize:10,fontWeight:600,color:"var(--text-muted)",fontFamily:"inherit"}}>
+                      <Icon name="palette" size={11}/> Symbols
+                    </button>
+                  )}
+                  {layers.length>0&&(
+                    <button onClick={()=>setFilterPanelOpen(true)}
+                      style={{display:"flex",alignItems:"center",gap:5,
+                        background:filters.length?"var(--accent)":"var(--panel2)",
+                        border:`1.5px solid ${filters.length?"var(--accent)":"var(--border)"}`,
+                        borderRadius:7,padding:"4px 10px",cursor:"pointer",fontSize:10,fontWeight:600,
+                        color:filters.length?"#fff":"var(--text-muted)",fontFamily:"inherit"}}>
+                      <Icon name="filter" size={11} color={filters.length?"#fff":"var(--text-muted)"}/>
+                      {filters.length?`${filters.length} Filter`:"Filter"}
+                    </button>
+                  )}
+                </div>
               </div>
-              <div style={{display:"flex",gap:5}}>
-                {Object.keys(colorMap).length>0&&(
-                  <button onClick={()=>setSymbolEditorOpen(true)}
-                    style={{display:"flex",alignItems:"center",gap:4,background:"var(--panel2)",
-                      border:"1px solid var(--border)",borderRadius:5,padding:"3px 8px",
-                      cursor:"pointer",fontSize:9,color:"var(--text-muted)",fontFamily:"inherit"}}>
-                    <Icon name="palette" size={11}/> SYMBOLS
-                  </button>
-                )}
-                {activeLayer&&(
-                  <button onClick={()=>setFilterPanelOpen(true)}
-                    style={{display:"flex",alignItems:"center",gap:4,
-                      background:filters.length?"var(--accent)":"var(--panel2)",
-                      border:`1px solid ${filters.length?"var(--accent)":"var(--border)"}`,
-                      borderRadius:5,padding:"3px 8px",cursor:"pointer",
-                      fontSize:9,color:filters.length?"#0e0e0c":"var(--text-muted)",fontFamily:"inherit"}}>
-                    <Icon name="filter" size={11} color={filters.length?"#0e0e0c":"var(--text-muted)"}/>
-                    {filters.length?`${filters.length} FILTER`:"FILTER"}
-                  </button>
-                )}
-              </div>
-            </div>
 
-            {/* Layer selector */}
-            {layers.length>0&&(
-              <div style={{padding:"8px 14px",borderBottom:"1px solid var(--border)",flexShrink:0}}>
-                <label style={{fontSize:9,color:"var(--text-muted)",letterSpacing:"0.1em",display:"block",marginBottom:4}}>ACTIVE LAYER</label>
-                <select value={activeLayer?.id||""}
-                  onChange={e=>{const l=layers.find(x=>String(x.id)===e.target.value);if(l){setActiveLayer(l);const f0=Object.keys(l.geojson?.features?.[0]?.properties||{})[0];if(f0)setCharts(p=>p.map((c,i)=>i===0?{...c,field:f0}:c));}}}
-                  style={{width:"100%",background:"var(--panel2)",border:"1px solid var(--border)",
-                    color:"var(--text)",borderRadius:6,padding:"6px 10px",fontSize:11,fontFamily:"inherit"}}>
-                  {layers.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
-                </select>
-              </div>
-            )}
-
-            {/* Labels */}
-            {activeLayer&&fields.length>0&&(
-              <div style={{padding:"7px 14px",borderBottom:"1px solid var(--border)",
-                display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                <button onClick={()=>setShowLabels(p=>!p)}
-                  style={{display:"flex",alignItems:"center",gap:5,background:showLabels?"var(--hover)":"transparent",
-                    border:`1px solid ${showLabels?"var(--accent)":"var(--border)"}`,borderRadius:5,
-                    padding:"3px 8px",cursor:"pointer",fontSize:9,
-                    color:showLabels?"var(--accent)":"var(--text-muted)",fontFamily:"inherit",flexShrink:0}}>
-                  <Icon name="label" size={11} color={showLabels?"var(--accent)":"var(--text-muted)"}/>
-                  LABELS
-                </button>
-                {showLabels&&(
-                  <select value={labelField} onChange={e=>setLabelField(e.target.value)}
-                    style={{flex:1,background:"var(--panel2)",border:"1px solid var(--border)",
-                      color:"var(--text)",borderRadius:5,padding:"4px 8px",fontSize:10,fontFamily:"inherit"}}>
-                    {fields.map(f=><option key={f} value={f}>{f}</option>)}
-                  </select>
-                )}
-              </div>
-            )}
-
-            {/* Chart panels */}
-            <div style={{flex:1,minHeight:0,overflowY:"auto"}}>
-              {!activeLayer?(
-                <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",
-                  justifyContent:"center",opacity:0.28,gap:14,padding:32,height:"100%"}}>
-                  <Icon name="db" size={40} color="var(--text-muted)"/>
-                  <div style={{textAlign:"center",fontSize:11,lineHeight:1.7,color:"var(--text-muted)"}}>
-                    Upload a shapefile, GeoJSON<br/>or CSV to begin
+              {/* Map symbology source */}
+              {layers.length>0&&(
+                <div style={{padding:"10px 16px",borderBottom:"1px solid var(--border)",flexShrink:0}}>
+                  <label style={{fontSize:10,fontWeight:600,color:"var(--text-muted)",
+                    letterSpacing:"0.08em",display:"block",marginBottom:6}}>
+                    MAP SYMBOLOGY LAYER · <span style={{color:"var(--accent)"}}>{geomType}</span>
+                  </label>
+                  <div style={{display:"flex",gap:6}}>
+                    <select value={String(primaryLayerId||"")}
+                      onChange={e=>{
+                        setPrimaryLayerId(e.target.value);
+                        const l=layers.find(x=>String(x.id)===e.target.value);
+                        const f0=Object.keys(l?.geojson?.features?.[0]?.properties||{})[0];
+                        if(f0){setPrimaryField(f0);setLabelField(f0);}
+                      }}
+                      style={{...ss(),flex:1}}>
+                      {layers.map(l=><option key={l.id} value={String(l.id)}>{l.name}</option>)}
+                    </select>
+                    <select value={primaryField||""}
+                      onChange={e=>setPrimaryField(e.target.value)}
+                      style={{...ss(),flex:1}}>
+                      <option value="">— field —</option>
+                      {fields.map(f=><option key={f} value={f}>{f}</option>)}
+                    </select>
                   </div>
                 </div>
-              ):(
-                <>
-                  {charts.map((chart,ci)=>(
-                    <div key={chart.id} style={{borderBottom:"1px solid var(--border)",padding:"10px 14px"}}>
-                      {/* Chart controls */}
-                      <div style={{display:"flex",gap:6,marginBottom:8,alignItems:"center"}}>
-                        <select value={chart.field} onChange={e=>updateChart(chart.id,{field:e.target.value})}
-                          style={{flex:1,background:"var(--panel2)",border:"1px solid var(--border)",
-                            color:"var(--text)",borderRadius:5,padding:"5px 8px",fontSize:10,fontFamily:"inherit"}}>
-                          <option value="">— select field —</option>
-                          {fields.map(f=><option key={f} value={f}>{f}</option>)}
-                        </select>
-                        <select value={chart.type} onChange={e=>updateChart(chart.id,{type:e.target.value})}
-                          style={{background:"var(--panel2)",border:"1px solid var(--border)",color:"var(--text)",
-                            borderRadius:5,padding:"5px 6px",fontSize:10,fontFamily:"inherit",width:66}}>
-                          {["bar","pie","donut","line","area","table"].map(t=><option key={t} value={t}>{t}</option>)}
-                        </select>
-                        {charts.length>1&&(
-                          <button onClick={()=>removeChart(chart.id)}
-                            style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",padding:3}}>
+              )}
+
+              {/* Labels */}
+              {layers.length>0&&fields.length>0&&(
+                <div style={{padding:"8px 16px",borderBottom:"1px solid var(--border)",
+                  display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                  <button onClick={()=>setShowLabels(p=>!p)}
+                    style={{display:"flex",alignItems:"center",gap:5,
+                      background:showLabels?"var(--accent-soft)":"transparent",
+                      border:`1.5px solid ${showLabels?"var(--accent)":"var(--border)"}`,
+                      borderRadius:7,padding:"4px 10px",cursor:"pointer",fontSize:10,fontWeight:600,
+                      color:showLabels?"var(--accent)":"var(--text-muted)",fontFamily:"inherit",flexShrink:0}}>
+                    <Icon name="label" size={12} color={showLabels?"var(--accent)":"var(--text-muted)"}/>
+                    Labels
+                  </button>
+                  {showLabels&&(
+                    <select value={labelField} onChange={e=>setLabelField(e.target.value)}
+                      style={{...ss(),flex:1}}>
+                      {fields.map(f=><option key={f} value={f}>{f}</option>)}
+                    </select>
+                  )}
+                </div>
+              )}
+
+              {/* Chart panels */}
+              <div style={{flex:1,minHeight:0,overflowY:"auto"}}>
+                {!layers.length?(
+                  <div style={{height:"100%",display:"flex",flexDirection:"column",
+                    alignItems:"center",justifyContent:"center",opacity:0.3,gap:16,padding:40}}>
+                    <Icon name="db" size={48} color="var(--text-muted)"/>
+                    <div style={{textAlign:"center",fontSize:13,lineHeight:1.8,color:"var(--text-muted)"}}>
+                      Upload a shapefile, GeoJSON<br/>or CSV to begin
+                    </div>
+                  </div>
+                ):(
+                  <>
+                    {sidebarCharts.map((chart,ci)=>(
+                      <div key={chart.id} style={{position:"relative"}}>
+                        {sidebarCharts.length>1&&(
+                          <button onClick={()=>removeSidebarChart(chart.id)}
+                            style={{position:"absolute",top:10,right:10,zIndex:10,
+                              background:"none",border:"none",cursor:"pointer",
+                              color:"var(--text-muted)",padding:3}}>
                             <Icon name="x" size={13}/>
                           </button>
                         )}
+                        {/* Each ChartWidget is fully self-contained: picks its own layer */}
+                        <ChartWidget
+                          layers={layers}
+                          visibleFeatsByLayer={visibleFeatsByLayer}
+                          config={chart}
+                          onConfigChange={patch=>updateSidebarChart(chart.id,patch)}
+                          isDark={isDark}
+                          compact={false}
+                        />
                       </div>
-                      {/* Chart or table */}
-                      {chart.type==="table"
-                        ?<TablePanel data={visibleFeats} field={chart.field} colorMap={colorMap}/>
-                        :<ChartPanel data={visibleFeats} field={chart.field} chartType={chart.type}
-                            colorMap={colorMap} isDark={isDark} height={200}/>
-                      }
-                    </div>
-                  ))}
+                    ))}
+                    {sidebarCharts.length<4&&(
+                      <button onClick={addSidebarChart}
+                        style={{width:"100%",padding:"12px 16px",background:"transparent",border:"none",
+                          borderBottom:"1px solid var(--border)",cursor:"pointer",
+                          display:"flex",alignItems:"center",gap:8,color:"var(--text-muted)",
+                          fontSize:12,fontFamily:"inherit",justifyContent:"center",fontWeight:600,
+                          transition:"background 0.12s"}}
+                        onMouseEnter={e=>e.currentTarget.style.background="var(--hover)"}
+                        onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                        <Icon name="plus" size={14}/> Add Chart Panel
+                      </button>
+                    )}
 
-                  {/* Add chart button */}
-                  {charts.length<3&&(
-                    <button onClick={addChart}
-                      style={{width:"100%",padding:"10px 14px",background:"transparent",
-                        border:"none",borderBottom:"1px solid var(--border)",cursor:"pointer",
-                        display:"flex",alignItems:"center",gap:6,color:"var(--text-muted)",
-                        fontSize:10,fontFamily:"inherit",justifyContent:"center"}}>
-                      <Icon name="plus" size={12}/> ADD CHART PANEL
-                    </button>
-                  )}
+                    {/* Legend for primary layer */}
+                    {primaryField&&layers.length>0&&(()=>{
+                      const baseColors=buildColorMap(activeLayer?.geojson?.features||[],primaryField);
+                      const mergedColors={...baseColors,...customColorMap};
+                      const cats=Object.keys(mergedColors);
+                      if(!cats.length) return null;
+                      const visFeats=visibleFeatsByLayer[String(activeLayer?.id)]||[];
+                      return(
+                        <div style={{padding:"14px 16px",borderBottom:"1px solid var(--border)"}}>
+                          <div style={{fontSize:10,fontWeight:700,color:"var(--text-muted)",
+                            letterSpacing:"0.08em",marginBottom:10,textTransform:"uppercase"}}>
+                            Legend · {primaryField}
+                            <span style={{marginLeft:8,color:"var(--accent)",fontWeight:600}}>{geomType}</span>
+                          </div>
+                          <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                            {cats.map(val=>{
+                              const col=mergedColors[val];
+                              const shape=customShapeMap[val]||"circle";
+                              const cnt=visFeats.filter(f=>String(f.properties?.[primaryField])===val).length;
+                              return(
+                                <div key={val} style={{display:"flex",alignItems:"center",gap:9}}>
+                                  <span dangerouslySetInnerHTML={{__html:legendSwatch(geomType,col,shape,22,14)}}
+                                    style={{flexShrink:0,display:"flex",alignItems:"center"}}/>
+                                  <span style={{flex:1,fontSize:12,color:"var(--text)",overflow:"hidden",
+                                    textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500}}>{val}</span>
+                                  <span style={{fontSize:11,color:"var(--text-muted)",fontFamily:"monospace",flexShrink:0}}>{cnt}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </>
+                )}
+              </div>
 
-                  {/* Legend */}
-                  {Object.keys(colorMap).length>0&&(
-                    <div style={{padding:"10px 14px"}}>
-                      <div style={{fontSize:9,color:"var(--text-muted)",letterSpacing:"0.1em",marginBottom:7}}>
-                        LEGEND — {primaryField}
-                      </div>
-                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                        {Object.entries(colorMap).map(([val,col])=>{
-                          const shape=shapeMap[val]||"circle";
-                          const cnt=visibleFeats.filter(f=>String(f.properties?.[primaryField])===val).length;
-                          return(
-                            <div key={val} style={{display:"flex",alignItems:"center",gap:7,fontSize:11}}>
-                              <span dangerouslySetInnerHTML={{__html:makeIconSVG(shape,col,12)}}
-                                style={{flexShrink:0,display:"flex",alignItems:"center"}}/>
-                              <span style={{color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",
-                                whiteSpace:"nowrap",flex:1,fontSize:10}}>{val}</span>
-                              <span style={{color:"var(--text-muted)",fontSize:9,flexShrink:0}}>{cnt}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* Sidebar footer */}
-            <div style={{borderTop:"1px solid var(--border)",padding:"6px 14px",flexShrink:0,
-              fontSize:9,color:"var(--text-muted)",display:"flex",justifyContent:"space-between"}}>
-              <span>{featureCount.toLocaleString()} visible / {totalFeatures.toLocaleString()}</span>
-              <span style={{color:"var(--accent)"}}>GEOCORE v4</span>
-            </div>
-          </div>
-        </div>
-
-        {/* ── MAP ── */}
-        <div style={{flex:1,position:"relative",overflow:"hidden"}}>
-          <div ref={mapDivRef} style={{width:"100%",height:"100%"}}/>
-
-          {/* Map toolbar (top-left) */}
-          <div style={{position:"absolute",left:12,top:12,zIndex:500,display:"flex",gap:6}}>
-            {/* Sidebar toggle */}
-            <button onClick={()=>setSideOpen(p=>!p)}
-              style={{width:32,height:32,background:"var(--panel)",border:"1px solid var(--border)",
-                borderRadius:7,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
-                color:"var(--text-muted)"}}>
-              <Icon name={sideOpen?"chevU":"chevD"} size={15}/>
-            </button>
-
-            {/* Basemap picker */}
-            <div style={{position:"relative"}}>
-              <button onClick={()=>setBasemapOpen(p=>!p)}
-                style={{background:"var(--panel)",border:"1px solid var(--border)",borderRadius:7,
-                  height:32,padding:"0 10px",cursor:"pointer",display:"flex",alignItems:"center",
-                  gap:5,color:"var(--text)",fontSize:10,fontFamily:"inherit",fontWeight:600}}>
-                <Icon name="map" size={12} color="var(--accent)"/> {basemap} <Icon name="chevD" size={11}/>
-              </button>
-              {basemapOpen&&(
-                <div style={{position:"absolute",top:36,left:0,background:"var(--panel)",
-                  border:"1px solid var(--border)",borderRadius:8,overflow:"hidden",
-                  boxShadow:"0 8px 24px var(--shadow)",zIndex:600,minWidth:130}}>
-                  {Object.keys(BASEMAPS).map(name=>(
-                    <button key={name} onClick={()=>{setBasemap(name);setBasemapOpen(false);}}
-                      style={{display:"block",width:"100%",padding:"8px 14px",textAlign:"left",
-                        background:basemap===name?"var(--hover)":"transparent",
-                        color:basemap===name?"var(--accent)":"var(--text)",
-                        fontSize:11,border:"none",borderBottom:"1px solid var(--border)",
-                        cursor:"pointer",fontFamily:"inherit"}}>
-                      {name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Measure tools */}
-            {[
-              {mode:"distance",label:"Distance",icon:"ruler"},
-              {mode:"area",    label:"Area",    icon:"filter"},
-            ].map(m=>(
-              <button key={m.mode} onClick={()=>setMeasureMode(p=>p===m.mode?null:m.mode)}
-                title={`Measure ${m.label}`}
-                style={{height:32,padding:"0 10px",background:measureMode===m.mode?"var(--accent)":"var(--panel)",
-                  border:`1px solid ${measureMode===m.mode?"var(--accent)":"var(--border)"}`,
-                  borderRadius:7,cursor:"pointer",display:"flex",alignItems:"center",gap:5,
-                  color:measureMode===m.mode?"#0e0e0c":"var(--text-muted)",
-                  fontSize:10,fontFamily:"inherit",fontWeight:600}}>
-                <Icon name={m.icon} size={12} color={measureMode===m.mode?"#0e0e0c":"var(--text-muted)"}/>
-                {m.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Measure result bubble */}
-          {measureResult&&(
-            <div style={{position:"absolute",left:"50%",top:60,transform:"translateX(-50%)",zIndex:500,
-              background:"var(--panel)",border:"1px solid var(--accent)",borderRadius:8,
-              padding:"8px 16px",fontSize:13,fontWeight:700,color:"var(--accent)",
-              boxShadow:"0 4px 16px var(--shadow)"}}>
-              {measureResult}
-              <button onClick={()=>{setMeasureResult("");setMeasureMode(null);}}
-                style={{marginLeft:12,background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)"}}>
-                <Icon name="x" size={13}/>
-              </button>
-            </div>
-          )}
-
-          {/* Measure instruction */}
-          {measureMode&&!measureResult&&(
-            <div style={{position:"absolute",left:"50%",top:60,transform:"translateX(-50%)",zIndex:500,
-              background:"rgba(14,14,12,0.88)",border:"1px solid var(--border)",borderRadius:8,
-              padding:"7px 14px",fontSize:11,color:"var(--text-muted)"}}>
-              {measureMode==="distance"?"Click to add points · ":"Click ≥3 points to measure area · "}
-              Click again to continue
-            </div>
-          )}
-
-          {/* Zoom + home (right) */}
-          <div style={{position:"absolute",right:14,bottom:44,zIndex:500,display:"flex",flexDirection:"column",gap:5}}>
-            {[["zIn",()=>mapRef.current?.zoomIn()],["zOut",()=>mapRef.current?.zoomOut()],
-              ["home",()=>mapRef.current?.setView([0,20],3)]].map(([ic,fn])=>(
-              <button key={ic} onClick={fn}
-                style={{width:32,height:32,borderRadius:7,background:"var(--panel)",
-                  border:"1px solid var(--border)",cursor:"pointer",display:"flex",
-                  alignItems:"center",justifyContent:"center",color:"var(--text-muted)"}}>
-                <Icon name={ic} size={14}/>
-              </button>
-            ))}
-          </div>
-
-          {/* Coordinate + attribution bar */}
-          <div style={{position:"absolute",bottom:0,left:0,right:0,height:26,
-            background:"rgba(14,14,12,0.78)",borderTop:"1px solid var(--border)",
-            display:"flex",alignItems:"center",justifyContent:"space-between",
-            padding:"0 12px",zIndex:499,fontSize:10,fontFamily:"monospace"}}>
-            <span style={{color:"var(--text-muted)"}}>📍 {coordDisplay}</span>
-            <span style={{color:"rgba(128,128,128,0.6)"}}>
-              {["Satellite","Hybrid"].includes(basemap)?"© Google":"© OpenStreetMap contributors"}
-            </span>
-          </div>
-
-          {/* Empty state */}
-          {!layers.length&&(
-            <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",
-              justifyContent:"center",pointerEvents:"none",zIndex:400}}>
-              <div style={{background:isDark?"rgba(14,14,12,0.9)":"rgba(238,234,226,0.95)",
-                border:"1px solid var(--border)",borderRadius:16,padding:"32px 48px",textAlign:"center"}}>
-                <Icon name="map" size={44} color="var(--accent)"/>
-                <div style={{marginTop:16,fontSize:15,fontWeight:700,letterSpacing:"0.04em"}}>No data loaded</div>
-                <div style={{marginTop:8,fontSize:11,color:"var(--text-muted)",lineHeight:1.7}}>
-                  Upload shapefile (.zip), GeoJSON or CSV<br/>using ADD DATA above
-                </div>
+              {/* Sidebar footer */}
+              <div style={{borderTop:"1.5px solid var(--border)",padding:"8px 16px",flexShrink:0,
+                background:"var(--panel)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:11,color:"var(--text-muted)"}}>
+                  {totalVisible.toLocaleString()} visible / {totalFeatures.toLocaleString()} total
+                </span>
+                <span style={{fontSize:10,color:"var(--accent)",fontWeight:700,letterSpacing:"0.06em"}}>GEOCORE v7</span>
               </div>
             </div>
-          )}
-        </div>
 
-        {/* ── LAYER PANEL ── */}
+            {/* Map */}
+            <div ref={dashRef} style={{flex:1,position:"relative",overflow:"hidden"}}>
+              <MapPanel {...mapProps} isDark={isDark}/>
+              {/* Coordinate display */}
+              <div style={{position:"absolute",bottom:26,left:0,right:0,height:22,
+                background:isDark?"rgba(15,25,35,0.88)":"rgba(255,255,255,0.88)",
+                borderTop:"1px solid var(--border)",display:"flex",alignItems:"center",
+                padding:"0 14px",zIndex:499}}>
+                <span style={{fontSize:11,color:"var(--text-muted)",fontFamily:"monospace"}}>📍 {coordDisplay}</span>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* LAYER PANEL */}
         {layerPanelOpen&&(
-          <div style={{position:"absolute",right:0,top:0,bottom:0,width:270,
-            background:"var(--panel)",borderLeft:"1px solid var(--border)",zIndex:600,
-            display:"flex",flexDirection:"column"}}>
-            <div style={{padding:"11px 14px",borderBottom:"1px solid var(--border)",
+          <div style={{position:"absolute",right:0,top:0,bottom:0,width:290,
+            background:"var(--panel)",borderLeft:"1.5px solid var(--border)",
+            zIndex:600,display:"flex",flexDirection:"column",
+            boxShadow:"-4px 0 24px var(--shadow)"}}>
+            <div style={{padding:"13px 16px",borderBottom:"1.5px solid var(--border)",
               display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div style={{display:"flex",alignItems:"center",gap:7}}>
-                <Icon name="layers" size={13} color="var(--accent)"/>
-                <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:"var(--text-muted)"}}>LAYER MANAGER</span>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <Icon name="layers" size={15} color="var(--accent)"/>
+                <span style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>Layer Manager</span>
               </div>
               <button onClick={()=>setLayerPanelOpen(false)}
-                style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",padding:3}}>
-                <Icon name="x" size={15}/>
+                style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",padding:4}}>
+                <Icon name="x" size={16}/>
               </button>
             </div>
-            <div style={{flex:1,overflowY:"auto",padding:"5px 0"}}>
-              {!layers.length
-                ?<div style={{padding:28,textAlign:"center",fontSize:11,color:"var(--text-muted)",opacity:0.5}}>No layers loaded</div>
+            <div style={{flex:1,overflowY:"auto",padding:"6px 0"}}>
+              {!layers.length?<EmptyMsg>No layers loaded</EmptyMsg>
                 :layers.map(layer=>(
-                  <div key={layer.id} onClick={()=>setActiveLayer(layer)}
-                    style={{padding:"9px 14px",cursor:"pointer",
-                      borderLeft:`3px solid ${activeLayer?.id===layer.id?"var(--accent)":"transparent"}`,
-                      background:activeLayer?.id===layer.id?"var(--hover)":"transparent",
-                      display:"flex",alignItems:"center",gap:9,transition:"all 0.12s"}}>
-                    <div style={{width:10,height:10,borderRadius:"50%",background:layer.color,flexShrink:0}}/>
+                <div key={layer.id}
+                  style={{padding:"11px 16px",
+                    borderLeft:`3px solid ${String(layer.id)===String(primaryLayerId)?"var(--accent)":"transparent"}`,
+                    background:String(layer.id)===String(primaryLayerId)?"var(--accent-soft)":"transparent",
+                    transition:"all 0.12s"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",marginBottom:8}}
+                    onClick={()=>{
+                      setPrimaryLayerId(String(layer.id));
+                      const f0=Object.keys(layer.geojson?.features?.[0]?.properties||{})[0];
+                      if(f0){setPrimaryField(f0);setLabelField(f0);}
+                    }}>
+                    <div style={{width:12,height:12,
+                      borderRadius:layer.geomType==="Polygon"?"3px":layer.geomType==="Line"?"2px":"50%",
+                      background:layer.color,flexShrink:0}}/>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:11,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{layer.name}</div>
-                      <div style={{fontSize:9,color:"var(--text-muted)",marginTop:1}}>{(layer.geojson?.features?.length||0).toLocaleString()} features</div>
+                      <div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{layer.name}</div>
+                      <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>
+                        {layer.geomType||"?"} · {(layer.geojson?.features?.length||0).toLocaleString()} features
+                      </div>
                     </div>
                     <button onClick={e=>{e.stopPropagation();toggleLayer(layer.id);}}
-                      style={{background:"none",border:"none",cursor:"pointer",color:layer.visible?"var(--accent)":"var(--text-muted)",padding:3}}>
-                      <Icon name={layer.visible?"eye":"eyeOff"} size={13}/>
+                      style={{background:"none",border:"none",cursor:"pointer",
+                        color:layer.visible?"var(--accent)":"var(--text-muted)",padding:3}}>
+                      <Icon name={layer.visible?"eye":"eyeOff"} size={15}/>
                     </button>
                     <button onClick={e=>{e.stopPropagation();removeLayer(layer.id);}}
                       style={{background:"none",border:"none",cursor:"pointer",color:"var(--danger)",padding:3}}>
-                      <Icon name="trash" size={13}/>
+                      <Icon name="trash" size={14}/>
                     </button>
                   </div>
-                ))
-              }
+                  <div style={{display:"flex",alignItems:"center",gap:8,paddingLeft:22}}>
+                    <Icon name="opacity" size={11} color="var(--text-muted)"/>
+                    <input type="range" min="0" max="1" step="0.05"
+                      value={layerOpacity[layer.id]??1}
+                      onChange={e=>setLayerOpacity(p=>({...p,[layer.id]:+e.target.value}))}
+                      style={{flex:1}}/>
+                    <span style={{fontSize:10,color:"var(--text-muted)",minWidth:26,textAlign:"right",fontFamily:"monospace"}}>
+                      {Math.round((layerOpacity[layer.id]??1)*100)}%
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div style={{borderTop:"1px solid var(--border)",padding:10}}>
-              <label style={{display:"flex",alignItems:"center",gap:7,background:"var(--panel2)",
-                border:"1px dashed var(--border)",borderRadius:7,padding:"9px 12px",
-                cursor:"pointer",fontSize:10,color:"var(--text-muted)",justifyContent:"center"}}>
-                <Icon name="plus" size={13}/> Add Layer
+            <div style={{borderTop:"1px solid var(--border)",padding:12}}>
+              <label style={{display:"flex",alignItems:"center",gap:8,background:"var(--panel2)",
+                border:"1.5px dashed var(--border)",borderRadius:10,padding:"10px 14px",
+                cursor:"pointer",fontSize:12,color:"var(--text-muted)",justifyContent:"center",fontWeight:600}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--accent)";e.currentTarget.style.color="var(--accent)";}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.color="var(--text-muted)";}}>
+                <Icon name="plus" size={14}/> Add Layer
                 <input type="file" multiple hidden accept=".zip,.geojson,.json,.csv" onChange={handleUpload}/>
               </label>
             </div>
@@ -1571,91 +2093,103 @@ function Dashboard({ project: initialProject, onBack, theme, onThemeToggle }) {
         )}
       </div>
 
-      {/* ── MODALS ── */}
+      {/* MODALS */}
       {symbolEditorOpen&&(
-        <SymbolEditor colorMap={colorMap} shapeMap={shapeMap} opacityMap={opacityMap}
-          onColorChange={(cat,col)=>setColorMap(p=>({...p,[cat]:col}))}
-          onShapeChange={(cat,shape)=>setShapeMap(p=>({...p,[cat]:shape}))}
-          onOpacityChange={(cat,val)=>setOpacityMap(p=>({...p,[cat]:val}))}
-          onClose={()=>setSymbolEditorOpen(false)}/>
+        <SymbolEditor
+          layer={activeLayer}
+          customColorMap={customColorMap}
+          customShapeMap={customShapeMap}
+          customOpacityMap={customOpacityMap}
+          primaryField={primaryField}
+          onColorChange={(cat,col)=>setCustomColorMap(p=>({...p,[cat]:col}))}
+          onShapeChange={(cat,shape)=>setCustomShapeMap(p=>({...p,[cat]:shape}))}
+          onOpacityChange={(cat,val)=>setCustomOpacityMap(p=>({...p,[cat]:val}))}
+          onClose={()=>setSymbolEditorOpen(false)}
+        />
       )}
       {filterPanelOpen&&(
-        <FilterPanel fields={fields}
+        <FilterPanel
+          fields={fields}
           features={activeLayer?.geojson?.features||[]}
-          filters={filters} onFiltersChange={setFilters}
-          onClose={()=>setFilterPanelOpen(false)}/>
+          filters={filters}
+          onFiltersChange={setFilters}
+          onClose={()=>setFilterPanelOpen(false)}
+        />
       )}
       {exportOpen&&(
-        <ExportModal dashboardRef={dashRef} mapDivRef={mapDivRef}
-          projectTitle={projectTitle} onClose={()=>setExportOpen(false)}/>
+        <ExportModal
+          dashboardRef={dashRef}
+          mapDivRef={mapDivRef}
+          projectTitle={projectTitle}
+          onClose={()=>setExportOpen(false)}
+        />
+      )}
+      {layoutPickerOpen&&(
+        <LayoutPicker
+          onPick={key=>setLayoutKey(key)}
+          onClose={()=>setLayoutPickerOpen(false)}
+        />
       )}
     </div>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════
-   ROOT — boot CDN then show Projects or Dashboard
-═══════════════════════════════════════════════════════════ */
-export default function App() {
-  const [ready,   setReady]   = useState(false);
-  const [screen,  setScreen]  = useState("projects"); // "projects" | "dashboard"
-  const [project, setProject] = useState(null);
-  const [theme,   setTheme]   = useState(()=>localStorage.getItem("geocore_theme")||"dark");
+/* ═══════════════════════════════════════════
+   ROOT
+═══════════════════════════════════════════ */
+export default function App(){
+  const [ready,setReady]=useState(false);
+  const [screen,setScreen]=useState("projects");
+  const [project,setProject]=useState(null);
+  const [theme,setTheme]=useState(()=>localStorage.getItem("geocore_theme")||"dark");
 
-  /* Apply theme tokens globally */
   useEffect(()=>{
-    const vars=THEMES[theme];
-    Object.entries(vars).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
+    Object.entries(THEMES[theme]).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
     localStorage.setItem("geocore_theme",theme);
   },[theme]);
 
-  /* Inject global CSS */
   useEffect(()=>{
-    if(document.getElementById("geocore-css")) return;
-    const el=document.createElement("style");
-    el.id="geocore-css";
-    el.textContent=`
-      *{box-sizing:border-box;margin:0;padding:0}
-      body,html,#root{height:100%;width:100%;font-family:'DM Mono','Courier New',monospace}
-      @keyframes spin{to{transform:rotate(360deg)}}
-    `;
+    if(document.getElementById("geocore-root-css")) return;
+    const el=document.createElement("style");el.id="geocore-root-css";
+    el.textContent=`*{box-sizing:border-box;margin:0;padding:0}body,html,#root{height:100%;width:100%;font-family:Inter,'DM Sans',sans-serif}@keyframes spin{to{transform:rotate(360deg)}}@keyframes loadbar{0%{width:0%;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0%;margin-left:100%}}`;
     document.head.appendChild(el);
+    if(!document.querySelector('link[href*="fonts.googleapis"]')){
+      const l=document.createElement("link");l.rel="stylesheet";
+      l.href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap";
+      document.head.appendChild(l);
+    }
   },[]);
 
-  /* Load CDN */
   useEffect(()=>{
     loadStyle(CDN.leaflet_css);
-    loadStyle(CDN.leaflet_draw_css);
     Promise.all([
-      loadScript(CDN.leaflet_js),
-      loadScript(CDN.papaparse),
-      loadScript(CDN.chartjs),
-      loadScript(CDN.shpjs),
-      loadScript(CDN.html2canvas),
-      loadScript(CDN.jspdf),
-    ]).then(()=>{
-      // Load leaflet draw after leaflet
-      return loadScript(CDN.leaflet_draw);
-    }).then(()=>setReady(true)).catch(console.error);
+      loadScript(CDN.leaflet_js),loadScript(CDN.papaparse),
+      loadScript(CDN.chartjs),loadScript(CDN.shpjs),
+      loadScript(CDN.html2canvas),loadScript(CDN.jspdf),
+    ]).then(()=>setReady(true)).catch(console.error);
   },[]);
 
-  const openProject = proj => { setProject(proj); setScreen("dashboard"); };
-  const goBack      = ()    => { setScreen("projects"); setProject(null); };
-  const toggleTheme = ()    => setTheme(t=>t==="dark"?"light":"dark");
+  const toggleTheme=()=>setTheme(t=>t==="dark"?"light":"dark");
 
-  if(!ready) return (
-    <div style={{display:"flex",alignItems:"center",justifyContent:"center",
-      height:"100vh",background:"#0e0e0c",color:"#E8B84B",
-      fontFamily:"'DM Mono','Courier New',monospace",gap:12,fontSize:14}}>
-      <div style={{width:20,height:20,border:"2px solid #E8B84B",borderTopColor:"transparent",
-        borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
-      Loading GeoCore v4…
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+  if(!ready) return(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+      height:"100vh",background:"#0f1923",gap:20}}>
+      <svg width="52" height="52" viewBox="0 0 36 36">
+        <polygon points="18,3 33,30 3,30" fill="#1A2B4A" stroke="#C8922A" strokeWidth="1.5"/>
+        <polygon points="18,10 26,25 10,25" fill="#C8922A" opacity="0.85"/>
+      </svg>
+      <div style={{color:"#C8922A",fontFamily:"Inter,sans-serif",fontSize:15,fontWeight:700,letterSpacing:"0.04em"}}>
+        Loading GeoCore…
+      </div>
+      <div style={{width:180,height:3,background:"#1c2a3d",borderRadius:3,overflow:"hidden"}}>
+        <div style={{height:"100%",background:"#C8922A",borderRadius:3,animation:"loadbar 1.8s ease-in-out infinite"}}/>
+      </div>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}@keyframes loadbar{0%{width:0%;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0%;margin-left:100%}}`}</style>
     </div>
   );
 
   if(screen==="projects")
-    return <ProjectsPage onOpen={openProject} theme={theme} onThemeToggle={toggleTheme}/>;
+    return <ProjectsPage onOpen={p=>{setProject(p);setScreen("dashboard");}} theme={theme} onThemeToggle={toggleTheme}/>;
 
-  return <Dashboard project={project} onBack={goBack} theme={theme} onThemeToggle={toggleTheme}/>;
+  return <Dashboard project={project} onBack={()=>{setScreen("projects");setProject(null);}} theme={theme} onThemeToggle={toggleTheme}/>;
 }

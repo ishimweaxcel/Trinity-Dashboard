@@ -11,6 +11,10 @@ const CDN = {
   shpjs:       "https://cdn.jsdelivr.net/npm/shpjs@4.0.4/dist/shp.js",
   html2canvas: "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
   jspdf:       "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+  togeojson:   "https://cdn.jsdelivr.net/npm/@mapbox/togeojson@0.16.0/togeojson.js",
+  jszip:       "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js",
+  turf:        "https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js",
+  leaflet_image: "https://cdn.jsdelivr.net/npm/leaflet-image@0.4.0/leaflet-image.js",
 };
 
 /* ═══════════════════════════════════════════
@@ -416,22 +420,22 @@ function ChartInner({built,chartType,isDark}){
    chartType, chartMode — fully independent.
    colorMap derived from layer data on the fly.
 ═══════════════════════════════════════════ */
-function ChartWidget({layers,visibleFeatsByLayer,config,onConfigChange,isDark,compact=false}){
+function ChartWidget({layers,visibleFeatsByLayer,config,onConfigChange,isDark,compact=false,applyFilters}){
   const {layerId,field,chartType,chartMode}=config;
 
-  // Find the layer this widget targets
   const layer=useMemo(()=>layers.find(l=>String(l.id)===String(layerId))||layers[0],[layers,layerId]);
   const geomType=useMemo(()=>detectGeomType(layer?.geojson),[layer]);
   const fields=useMemo(()=>Object.keys(layer?.geojson?.features?.[0]?.properties||{}),[layer]);
 
-  // Visible features for THIS layer — not a shared global
-  // Fall back to all features if bounds haven't been computed yet (first load)
+  // Visible features for THIS layer — filtered and bounds-clipped
+  // Falls back to filtered-all-features on first load (before bounds are computed)
   const visibleFeats=useMemo(()=>{
     const vf=visibleFeatsByLayer[String(layer?.id)];
     if(vf&&vf.length>0) return vf;
-    // If no visible computed yet, use all features so chart shows immediately
-    return layer?.geojson?.features||[];
-  },[visibleFeatsByLayer,layer]);
+    // Bounds not computed yet — use all features but still apply filters
+    const all=layer?.geojson?.features||[];
+    return applyFilters?applyFilters(all,String(layer?.id)):all;
+  },[visibleFeatsByLayer,layer,applyFilters]);
 
   // ColorMap derived directly from this layer's full data for this field
   const colorMap=useMemo(()=>buildColorMap(layer?.geojson?.features||[],field),[layer,field]);
@@ -791,122 +795,437 @@ function GeocoderSearch({mapRef}){
 /* ═══════════════════════════════════════════
    SYMBOL EDITOR MODAL
 ═══════════════════════════════════════════ */
-function SymbolEditor({layer,customColorMap,customShapeMap,customOpacityMap,primaryField,onColorChange,onShapeChange,onOpacityChange,onClose}){
+function SymbolEditor({layer,customColorMap={},customShapeMap={},customOpacityMap={},customSizeMap={},
+  customOutlineColorMap={},customOutlineWidthMap={},customHollowMap={},primaryField,
+  onColorChange,onShapeChange,onOpacityChange,onSizeChange,
+  onOutlineColorChange,onOutlineWidthChange,onHollowChange,onClose}){
   const geomType=detectGeomType(layer?.geojson);
-  const isPoint=geomType==="Point",isPoly=geomType==="Polygon";
+  const isPoint=geomType==="Point",isPoly=geomType==="Polygon",isLine=geomType==="Line";
   const baseColorMap=useMemo(()=>buildColorMap(layer?.geojson?.features||[],primaryField),[layer,primaryField]);
   const cats=Object.keys(baseColorMap);
-  const getColor=cat=>customColorMap[cat]||baseColorMap[cat]||"#888";
+  const getColor=cat=>customColorMap[cat]||baseColorMap[cat]||"#C8922A";
+  const getOutline=cat=>customOutlineColorMap[cat]||getColor(cat);
+  const isHollow=cat=>!!customHollowMap[cat];
+
+  // Global size shortcut for points
+  const [globalSize,setGlobalSize]=useState(16);
+  const applyGlobalSize=sz=>{setGlobalSize(sz);cats.forEach(cat=>onSizeChange(cat,sz));};
+
+  const ColSwatch=({color,onChange,title=""})=>(
+    <div title={title} style={{position:"relative",width:24,height:24,borderRadius:5,
+      background:color,border:"2px solid var(--border)",overflow:"hidden",cursor:"pointer",flexShrink:0}}>
+      <input type="color" value={color} onChange={e=>onChange(e.target.value)}
+        style={{opacity:0,position:"absolute",inset:0,width:"100%",height:"100%",cursor:"pointer",padding:0}}/>
+    </div>
+  );
 
   return(
-    <Modal title="Symbol Editor" subtitle={`${geomType} Layer — ${layer?.name||""}`} onClose={onClose} width={430}>
+    <Modal title="Symbol Editor" subtitle={`${geomType} Layer — ${layer?.name||""}`} onClose={onClose} width={520}>
+      {/* Global point size */}
+      {isPoint&&(
+        <div style={{padding:"10px 18px",borderBottom:"1px solid var(--border)",
+          display:"flex",alignItems:"center",gap:12,background:"var(--panel2)"}}>
+          <span style={{fontSize:11,fontWeight:600,color:"var(--text-muted)",
+            fontFamily:"Inter,DM Sans,sans-serif",whiteSpace:"nowrap"}}>ALL SIZES</span>
+          <input type="range" min="6" max="48" step="1" value={globalSize}
+            onChange={e=>applyGlobalSize(+e.target.value)} style={{flex:1}}/>
+          <span style={{fontSize:12,fontWeight:700,color:"var(--accent)",
+            minWidth:32,textAlign:"right",fontFamily:"monospace"}}>{globalSize}px</span>
+          <div style={{width:globalSize,height:globalSize,borderRadius:"50%",
+            background:"var(--accent)",flexShrink:0,transition:"all 0.1s"}}/>
+        </div>
+      )}
+      {/* Column headers */}
       <div style={{display:"grid",
-        gridTemplateColumns:isPoint?"28px 1fr 88px 80px":"28px 1fr 80px",
-        gap:8,padding:"8px 18px",borderBottom:"1px solid var(--border)",
-        fontSize:10,color:"var(--text-muted)",fontWeight:600,letterSpacing:"0.08em",fontFamily:"Inter,DM Sans,sans-serif"}}>
-        <span/><span>CLASS</span>{isPoint&&<span>SHAPE</span>}<span>{isPoly?"FILL %":"OPACITY"}</span>
+        gridTemplateColumns:isPoint
+          ?"32px 1fr 72px 60px 60px 56px"
+          :"32px 1fr 56px 56px 44px 56px",
+        gap:6,padding:"7px 16px",borderBottom:"1px solid var(--border)",
+        fontSize:9,color:"var(--text-muted)",fontWeight:700,
+        letterSpacing:"0.08em",fontFamily:"Inter,DM Sans,sans-serif",textTransform:"uppercase"}}>
+        <span/>
+        <span>CLASS</span>
+        {isPoint&&<span style={{textAlign:"center"}}>SHAPE</span>}
+        {!isPoint&&<span style={{textAlign:"center"}}>HOLLOW</span>}
+        <span style={{textAlign:"center"}}>FILL</span>
+        <span style={{textAlign:"center"}}>OUTLINE</span>
+        {isPoint&&<span style={{textAlign:"center"}}>SIZE</span>}
+        {!isPoint&&<span style={{textAlign:"center"}}>W</span>}
+        <span style={{textAlign:"center"}}>{isPoly?"FILL %":"OPACITY"}</span>
       </div>
       <div style={{overflowY:"auto",flex:1}}>
-        {cats.length===0?<EmptyMsg>Select a field first</EmptyMsg>
-          :cats.map(cat=>(
+        {cats.length===0?<EmptyMsg>Select a classification field first</EmptyMsg>
+          :cats.map(cat=>{
+          const sz=customSizeMap[cat]||globalSize||16;
+          const hollow=isHollow(cat);
+          const outW=customOutlineWidthMap[cat]??(isLine?2.5:1.5);
+          return(
           <div key={cat} style={{display:"grid",
-            gridTemplateColumns:isPoint?"28px 1fr 88px 80px":"28px 1fr 80px",
-            gap:8,padding:"10px 18px",borderBottom:"1px solid var(--border)",alignItems:"center"}}>
-            <div style={{position:"relative",width:24,height:24,borderRadius:"50%",
-              background:getColor(cat),border:"2px solid var(--border)",overflow:"hidden",cursor:"pointer"}}>
-              <input type="color" value={getColor(cat)} onChange={e=>onColorChange(cat,e.target.value)}
-                style={{opacity:0,position:"absolute",inset:0,width:"100%",height:"100%",cursor:"pointer",padding:0}}/>
-            </div>
+            gridTemplateColumns:isPoint
+              ?"32px 1fr 72px 60px 60px 56px"
+              :"32px 1fr 56px 56px 44px 56px",
+            gap:6,padding:"9px 16px",borderBottom:"1px solid var(--border)",alignItems:"center"}}>
+
+            {/* Fill color swatch (also main color for lines/points) */}
+            <ColSwatch color={getColor(cat)} onChange={v=>onColorChange(cat,v)} title="Fill colour"/>
+
+            {/* Class label with preview */}
             <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
-              <span dangerouslySetInnerHTML={{__html:legendSwatch(geomType,getColor(cat),customShapeMap[cat]||"circle",22,13)}}
+              <span dangerouslySetInnerHTML={{__html:legendSwatch(geomType,hollow?"transparent":getColor(cat),customShapeMap[cat]||"circle",22,13)}}
                 style={{flexShrink:0,display:"flex",alignItems:"center"}}/>
               <span style={{fontSize:12,color:"var(--text)",overflow:"hidden",
                 textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"Inter,DM Sans,sans-serif"}}>{cat}</span>
             </div>
-            {isPoint&&(
+
+            {/* Shape (points) OR Hollow toggle (polygon/line) */}
+            {isPoint?(
               <select value={customShapeMap[cat]||"circle"} onChange={e=>onShapeChange(cat,e.target.value)}
                 style={ss({fontSize:10,padding:"3px 5px"})}>
                 {POINT_SHAPES.map(s=><option key={s} value={s}>{s}</option>)}
               </select>
+            ):(
+              <button onClick={()=>onHollowChange(cat,!hollow)} title={hollow?"Click to fill":"Click for no fill (hollow)"}
+                style={{padding:"4px 8px",borderRadius:7,fontSize:10,fontWeight:700,cursor:"pointer",
+                  fontFamily:"Inter,DM Sans,sans-serif",border:"1.5px solid var(--border)",
+                  background:hollow?"var(--panel3)":"var(--accent-soft)",
+                  color:hollow?"var(--text-muted)":"var(--accent)"}}>
+                {hollow?"∅ Hollow":"● Filled"}
+              </button>
             )}
-            <div style={{display:"flex",alignItems:"center",gap:6}}>
+
+            {/* Fill color picker (shown for all, greyed out when hollow) */}
+            <div style={{display:"flex",justifyContent:"center",opacity:hollow?0.3:1}}>
+              <ColSwatch color={getColor(cat)} onChange={v=>{onColorChange(cat,v);}} title="Fill colour"/>
+            </div>
+
+            {/* Outline color picker */}
+            <div style={{display:"flex",justifyContent:"center"}}>
+              <ColSwatch color={getOutline(cat)} onChange={v=>onOutlineColorChange(cat,v)} title="Outline colour"/>
+            </div>
+
+            {/* Size (points) OR outline width (poly/line) */}
+            {isPoint?(
+              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                <input type="range" min="6" max="48" step="1" value={sz}
+                  onChange={e=>onSizeChange(cat,+e.target.value)} style={{flex:1}}/>
+                <span style={{fontSize:9,color:"var(--text-muted)",minWidth:18,
+                  textAlign:"right",fontFamily:"monospace"}}>{sz}</span>
+              </div>
+            ):(
+              <div style={{display:"flex",alignItems:"center",gap:3}}>
+                <input type="range" min="0.5" max="8" step="0.5" value={outW}
+                  onChange={e=>onOutlineWidthChange(cat,+e.target.value)} style={{flex:1}}/>
+                <span style={{fontSize:9,color:"var(--text-muted)",minWidth:16,
+                  textAlign:"right",fontFamily:"monospace"}}>{outW}</span>
+              </div>
+            )}
+
+            {/* Opacity (greyed when hollow for polygons) */}
+            <div style={{display:"flex",alignItems:"center",gap:4,opacity:(hollow&&isPoly)?0.3:1}}>
               <input type="range" min="0" max="1" step="0.05"
                 value={customOpacityMap[cat]??0.85}
-                onChange={e=>onOpacityChange(cat,+e.target.value)}
-                style={{flex:1}}/>
-              <span style={{fontSize:10,color:"var(--text-muted)",minWidth:26,
+                onChange={e=>onOpacityChange(cat,+e.target.value)} style={{flex:1}}/>
+              <span style={{fontSize:9,color:"var(--text-muted)",minWidth:24,
                 textAlign:"right",fontFamily:"monospace"}}>
                 {Math.round((customOpacityMap[cat]??0.85)*100)}%
               </span>
             </div>
           </div>
-        ))}
+        )})}
       </div>
-      <div style={{padding:"10px 18px",borderTop:"1px solid var(--border)",fontSize:11,
+      <div style={{padding:"8px 16px",borderTop:"1px solid var(--border)",fontSize:11,
         color:"var(--text-muted)",textAlign:"center",fontFamily:"Inter,DM Sans,sans-serif"}}>
-        {isPoly?"Rectangles in legend · Fill opacity slider":isPoint?"Click colour · Choose shape · Opacity":"Click colour · Adjust opacity"}
+        {isPoint?"Fill colour · Shape · Size slider · Opacity"
+          :"∅ Hollow = no fill · Fill colour swatch · Outline colour swatch · Outline width · Opacity"}
       </div>
     </Modal>
   );
 }
 
 /* ═══════════════════════════════════════════
-   FILTER PANEL
+   FILTER SYSTEM v2
+   Data model:
+   filters = [
+     {
+       id, layerId:"all"|layerId,
+       groupOp:"AND"|"OR",   ← how rules within this group combine
+       rules:[
+         {id, field, op:"="|"≠"|"in"|"not_in"|"contains"|">"|"<"|">="|"<=", val, vals:[]}
+       ]
+     }
+   ]
+   Groups are always joined by AND between each other.
 ═══════════════════════════════════════════ */
-function FilterPanel({fields,features,filters,onFiltersChange,onClose}){
-  const [field,setField]=useState(fields[0]||"");
-  const [op,setOp]=useState("=");
-  const [val,setVal]=useState("");
+
+/* Evaluate a single rule against a feature */
+function evalRule(rule,props){
+  const raw=props?.[rule.field];
+  const v=raw==null?"":String(raw);
+  const rv=String(rule.val??"");
+  switch(rule.op){
+    case "=":       return v===rv;
+    case "≠":       return v!==rv;
+    case "in":      return (rule.vals||[]).map(String).includes(v);
+    case "not_in":  return !(rule.vals||[]).map(String).includes(v);
+    case "contains":return v.toLowerCase().includes(rv.toLowerCase());
+    case "starts":  return v.toLowerCase().startsWith(rv.toLowerCase());
+    case ">":       return parseFloat(v)>parseFloat(rv);
+    case "<":       return parseFloat(v)<parseFloat(rv);
+    case ">=":      return parseFloat(v)>=parseFloat(rv);
+    case "<=":      return parseFloat(v)<=parseFloat(rv);
+    default:        return true;
+  }
+}
+
+/* Evaluate a filter group against a feature */
+function evalGroup(group,feature,layerId){
+  if(!group.rules?.length) return true;
+  if(group.layerId!=="all"&&String(group.layerId)!==String(layerId)) return true;
+  const props=feature.properties||{};
+  if(group.groupOp==="OR") return group.rules.some(r=>evalRule(r,props));
+  return group.rules.every(r=>evalRule(r,props));
+}
+
+/* Apply all filter groups to a feature — groups are AND-combined */
+function passesAllFilters(filters,feature,layerId){
+  if(!filters?.length) return true;
+  return filters.every(g=>evalGroup(g,feature,layerId));
+}
+
+const FILTER_OPS=[
+  {op:"in",     label:"is any of  ✓"},
+  {op:"not_in", label:"is none of  ✗"},
+  {op:"=",      label:"equals exactly"},
+  {op:"≠",      label:"does not equal"},
+  {op:"contains",label:"contains text"},
+  {op:">",      label:"greater than  >"},
+  {op:"<",      label:"less than  <"},
+  {op:">=",     label:"at least  ≥"},
+  {op:"<=",     label:"at most  ≤"},
+];
+
+function FilterRuleRow({rule,features,fields,onChange,onRemove}){
   const uniqueVals=useMemo(()=>{
-    if(!field||!features?.length) return [];
-    return[...new Set(features.map(f=>String(f.properties?.[field]??"")).filter(Boolean))].sort().slice(0,60);
-  },[field,features]);
-  const add=()=>{if(!field||!val) return;onFiltersChange([...filters,{id:Date.now(),field,op,val}]);setVal("");};
+    if(!rule.field||!features?.length) return [];
+    return[...new Set(features.map(f=>String(f.properties?.[rule.field]??"")).filter(Boolean))].sort().slice(0,80);
+  },[rule.field,features]);
+
+  const isMulti=rule.op==="in"||rule.op==="not_in";
+  const selected=rule.vals||[];
+
+  const toggleVal=v=>{
+    const next=selected.includes(v)?selected.filter(x=>x!==v):[...selected,v];
+    onChange({...rule,vals:next});
+  };
+
   return(
-    <Modal title="Attribute Filter" onClose={onClose} width={430}>
-      <div style={{padding:"12px 18px",borderBottom:"1px solid var(--border)",display:"flex",gap:8,flexWrap:"wrap"}}>
-        <select value={field} onChange={e=>setField(e.target.value)} style={{...ss(),flex:2}}>
+    <div style={{background:"var(--panel2)",border:"1px solid var(--border)",borderRadius:10,
+      padding:"10px 12px",marginBottom:8}}>
+      <div style={{display:"flex",gap:6,marginBottom:isMulti&&uniqueVals.length?8:0,flexWrap:"wrap"}}>
+        {/* Field selector */}
+        <select value={rule.field} onChange={e=>onChange({...rule,field:e.target.value,val:"",vals:[]})}
+          style={{...ss(),flex:"1 1 110px"}}>
           {fields.map(f=><option key={f} value={f}>{f}</option>)}
         </select>
-        <select value={op} onChange={e=>setOp(e.target.value)} style={{...ss(),flex:"0 0 60px"}}>
-          {["=","≠","contains","starts"].map(o=><option key={o} value={o}>{o}</option>)}
+        {/* Operator */}
+        <select value={rule.op} onChange={e=>onChange({...rule,op:e.target.value,val:"",vals:[]})}
+          style={{...ss(),flex:"0 0 110px"}}>
+          {FILTER_OPS.map(o=><option key={o.op} value={o.op}>{o.label}</option>)}
         </select>
-        <select value={val} onChange={e=>setVal(e.target.value)} style={{...ss(),flex:2}}>
-          <option value="">— pick value —</option>
-          {uniqueVals.map(v=><option key={v} value={v}>{v}</option>)}
-        </select>
-        <button onClick={add}
-          style={{flex:"0 0 38px",height:36,background:"var(--accent)",border:"none",
-            borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <Icon name="plus" size={16} color="#fff"/>
+        {/* Single value picker */}
+        {!isMulti&&(
+          <select value={rule.val} onChange={e=>onChange({...rule,val:e.target.value})}
+            style={{...ss(),flex:"1 1 110px"}}>
+            <option value="">— pick —</option>
+            {uniqueVals.map(v=><option key={v} value={v}>{v}</option>)}
+          </select>
+        )}
+        <button onClick={onRemove}
+          style={{flex:"0 0 30px",height:32,background:"none",border:"1px solid var(--border)",
+            borderRadius:7,cursor:"pointer",color:"var(--danger)",display:"flex",
+            alignItems:"center",justifyContent:"center"}}>
+          <Icon name="x" size={13}/>
         </button>
       </div>
-      <div style={{flex:1,overflowY:"auto",padding:filters.length?"10px 18px":0}}>
-        {filters.length===0?<EmptyMsg>No filters — all features visible</EmptyMsg>
-          :filters.map(f=>(
-          <div key={f.id} style={{display:"flex",alignItems:"center",gap:10,
-            padding:"10px 12px",marginBottom:8,background:"var(--panel2)",
-            border:"1px solid var(--border)",borderRadius:10}}>
-            <span style={{flex:1,fontSize:12,fontFamily:"Inter,DM Sans,sans-serif"}}>
-              <strong style={{color:"var(--accent)"}}>{f.field}</strong>
-              {" "}<span style={{color:"var(--text-muted)"}}>{f.op}</span>{" "}
-              <span style={{color:"var(--success)",fontStyle:"italic"}}>"{f.val}"</span>
-            </span>
-            <button onClick={()=>onFiltersChange(filters.filter(x=>x.id!==f.id))}
-              style={{background:"none",border:"none",cursor:"pointer",color:"var(--danger)",padding:2}}>
-              <Icon name="x" size={14}/>
+      {/* Multi-value chips for "is any of" / "is none of" */}
+      {isMulti&&uniqueVals.length>0&&(
+        <div style={{display:"flex",flexWrap:"wrap",gap:5,maxHeight:120,overflowY:"auto",
+          padding:"4px 0",borderTop:"1px solid var(--border)",marginTop:2}}>
+          {uniqueVals.map(v=>{
+            const active=selected.includes(v);
+            return(
+              <button key={v} onClick={()=>toggleVal(v)}
+                style={{padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:active?700:400,
+                  cursor:"pointer",fontFamily:"Inter,DM Sans,sans-serif",
+                  background:active?"var(--accent)":"var(--panel3)",
+                  color:active?"#fff":"var(--text-muted)",
+                  border:`1.5px solid ${active?"var(--accent)":"var(--border)"}`,
+                  transition:"all 0.1s"}}>
+                {v}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {isMulti&&selected.length>0&&(
+        <div style={{marginTop:6,fontSize:11,color:"var(--text-muted)",fontFamily:"Inter,DM Sans,sans-serif"}}>
+          {selected.length} value{selected.length>1?"s":""} selected
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FilterGroupCard({group,layers,activeLayerFeatures,allLayerFeatures,onChange,onRemove,index}){
+  const layer=layers.find(l=>String(l.id)===String(group.layerId));
+  const features=group.layerId==="all"?activeLayerFeatures
+    :(allLayerFeatures[String(group.layerId)]||activeLayerFeatures);
+  const fields=useMemo(()=>Object.keys(features?.[0]?.properties||{}),[features]);
+
+  const addRule=()=>{
+    const f=fields[0]||"";
+    onChange({...group,rules:[...group.rules,{id:Date.now(),field:f,op:"in",val:"",vals:[]}]});
+  };
+  const updateRule=(id,patch)=>onChange({...group,rules:group.rules.map(r=>r.id===id?{...r,...patch}:r)});
+  const removeRule=id=>onChange({...group,rules:group.rules.filter(r=>r.id!==id)});
+
+  const isOR=group.groupOp==="OR";
+
+  return(
+    <div style={{border:`1.5px solid ${isOR?"var(--accent)":"var(--border)"}`,
+      borderRadius:12,marginBottom:12,overflow:"hidden",
+      boxShadow:isOR?"0 0 0 1px var(--accent-soft)":"none"}}>
+      {/* Group header — plain language */}
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",
+        background:"var(--panel3)",borderBottom:"1px solid var(--border)",flexWrap:"wrap"}}>
+        {/* Show/hide label */}
+        <span style={{fontSize:11,fontWeight:700,color:"var(--text-muted)",
+          fontFamily:"Inter,DM Sans,sans-serif",background:"var(--panel2)",
+          padding:"2px 8px",borderRadius:5,border:"1px solid var(--border)"}}>
+          {index===0?"Show":"And also"}
+        </span>
+        {/* Layer scope pill */}
+        <span style={{fontSize:11,color:"var(--text-muted)",fontFamily:"Inter,DM Sans,sans-serif"}}>features in</span>
+        <select value={group.layerId} onChange={e=>onChange({...group,layerId:e.target.value})}
+          style={{...ss(),fontSize:11,padding:"3px 8px",flex:"1 1 100px",minWidth:80}}>
+          <option value="all">all layers</option>
+          {layers.map(l=><option key={l.id} value={String(l.id)}>{l.name}</option>)}
+        </select>
+        {/* Match mode */}
+        <span style={{fontSize:11,color:"var(--text-muted)",fontFamily:"Inter,DM Sans,sans-serif"}}>matching</span>
+        <div style={{display:"flex",borderRadius:7,overflow:"hidden",border:"1px solid var(--border)",flexShrink:0}}>
+          {[["OR","any rule"],["AND","all rules"]].map(([op,lbl])=>(
+            <button key={op} onClick={()=>onChange({...group,groupOp:op})}
+              title={op==="OR"?"Feature passes if ANY rule matches":"Feature passes only if ALL rules match"}
+              style={{padding:"3px 10px",fontSize:10,fontWeight:700,border:"none",cursor:"pointer",
+                fontFamily:"Inter,DM Sans,sans-serif",
+                background:group.groupOp===op?"var(--accent)":"var(--panel2)",
+                color:group.groupOp===op?"#fff":"var(--text-muted)"}}>
+              {lbl}
             </button>
-          </div>
-        ))}
+          ))}
+        </div>
+        <button onClick={onRemove} title="Remove this filter group"
+          style={{background:"none",border:"none",cursor:"pointer",color:"var(--danger)",
+            padding:2,marginLeft:"auto"}}>
+          <Icon name="x" size={14}/>
+        </button>
       </div>
-      {filters.length>0&&(
-        <div style={{padding:"10px 18px",borderTop:"1px solid var(--border)",
+      {/* Rules list */}
+      <div style={{padding:"10px 12px 4px"}}>
+        {group.rules.length===0
+          ?<div style={{fontSize:11,color:"var(--text-muted)",padding:"8px 0",
+              fontFamily:"Inter,DM Sans,sans-serif",textAlign:"center"}}>
+              No rules yet — click "Add rule" below
+            </div>
+          :group.rules.map((rule,ri)=>(
+            <div key={rule.id}>
+              {ri>0&&(
+                <div style={{display:"flex",alignItems:"center",gap:6,margin:"4px 0"}}>
+                  <div style={{flex:1,height:1,background:"var(--border)"}}/>
+                  <span style={{fontSize:10,fontWeight:700,
+                    color:isOR?"var(--accent)":"var(--text-muted)",
+                    fontFamily:"Inter,DM Sans,sans-serif",padding:"0 6px"}}>
+                    {isOR?"OR":"AND"}
+                  </span>
+                  <div style={{flex:1,height:1,background:"var(--border)"}}/>
+                </div>
+              )}
+              <FilterRuleRow
+                rule={rule} features={features} fields={fields}
+                onChange={p=>updateRule(rule.id,p)}
+                onRemove={()=>removeRule(rule.id)}
+              />
+            </div>
+          ))
+        }
+        <button onClick={addRule}
+          style={{width:"100%",padding:"7px",border:"1px dashed var(--border)",borderRadius:8,
+            background:"none",cursor:"pointer",color:"var(--text-muted)",fontSize:11,
+            fontFamily:"Inter,DM Sans,sans-serif",marginBottom:8,
+            display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+          <Icon name="plus" size={12}/> Add rule
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FilterPanel({layers,features,allLayerFeatures,filters,onFiltersChange,onClose}){
+  const activeCount=useMemo(()=>{
+    let n=0;
+    filters.forEach(g=>g.rules.forEach(r=>{
+      if(r.op==="in"||r.op==="not_in"?r.vals?.length:r.val) n++;
+    }));
+    return n;
+  },[filters]);
+
+  const addGroup=()=>onFiltersChange([...filters,{
+    id:Date.now(),layerId:"all",groupOp:"OR",
+    rules:[{id:Date.now()+1,field:Object.keys(features?.[0]?.properties||{})[0]||"",
+            op:"in",val:"",vals:[]}]
+  }]);
+
+  const updateGroup=(id,patch)=>onFiltersChange(filters.map(g=>g.id===id?{...g,...patch}:g));
+  const removeGroup=id=>onFiltersChange(filters.filter(g=>g.id!==id));
+
+  return(
+    <Modal title="Smart Filter" onClose={onClose} width={480}>
+      <div style={{padding:"10px 16px 0",flex:1,overflowY:"auto",maxHeight:"65vh"}}>
+        {filters.length===0
+          ?<div style={{textAlign:"center",padding:"28px 0",color:"var(--text-muted)",
+              fontSize:13,fontFamily:"Inter,DM Sans,sans-serif"}}>
+              <div style={{fontSize:28,marginBottom:8}}>🔍</div>
+              No filters — all features visible.<br/>
+              <span style={{fontSize:11}}>Add a filter group to start.</span>
+            </div>
+          :filters.map((g,i)=>(
+            <FilterGroupCard key={g.id} group={g} index={i}
+              layers={layers} activeLayerFeatures={features}
+              allLayerFeatures={allLayerFeatures}
+              onChange={p=>updateGroup(g.id,p)}
+              onRemove={()=>removeGroup(g.id)}
+            />
+          ))
+        }
+        <button onClick={addGroup}
+          style={{width:"100%",padding:"9px",border:"1.5px dashed var(--accent)",borderRadius:10,
+            background:"var(--accent-soft)",cursor:"pointer",color:"var(--accent)",fontSize:12,
+            fontFamily:"Inter,DM Sans,sans-serif",fontWeight:600,marginBottom:12,
+            display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+          <Icon name="plus" size={13}/> Add Filter Group
+        </button>
+      </div>
+      {(filters.length>0)&&(
+        <div style={{padding:"10px 16px",borderTop:"1px solid var(--border)",
           display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span style={{fontSize:12,color:"var(--text-muted)",fontFamily:"Inter,DM Sans,sans-serif"}}>
-            {filters.length} active filter{filters.length>1?"s":""}
+          <span style={{fontSize:11,color:"var(--text-muted)",fontFamily:"Inter,DM Sans,sans-serif",lineHeight:1.6}}>
+            <strong style={{color:"var(--accent)"}}>{activeCount} rule{activeCount!==1?"s":""} active</strong>
+            {" · multiple groups are combined with "}<strong>AND</strong>
           </span>
           <button onClick={()=>onFiltersChange([])}
-            style={{fontSize:12,color:"var(--danger)",background:"none",border:"none",cursor:"pointer"}}>
+            style={{fontSize:12,color:"var(--danger)",background:"none",border:"none",
+              cursor:"pointer",fontFamily:"Inter,DM Sans,sans-serif",flexShrink:0,marginLeft:8}}>
             Clear all
           </button>
         </div>
@@ -918,20 +1237,72 @@ function FilterPanel({fields,features,filters,onFiltersChange,onClose}){
 /* ═══════════════════════════════════════════
    EXPORT MODAL — dismisses itself before capture
 ═══════════════════════════════════════════ */
-function ExportModal({dashboardRef,mapDivRef,editorRef,projectTitle,onClose}){
+function ExportModal({dashboardRef,mapDivRef,mapRef,editorRef,projectTitle,onClose}){
   const [exporting,setExporting]=useState(false);
+
+  // Capture the live Leaflet map (tiles + vector layers + markers) as a canvas.
+  // html2canvas cannot render cross-origin raster tiles (Google/OSM imagery),
+  // which is why the map area was showing up blank in exports. leaflet-image
+  // fetches/redraws tiles onto a canvas with proper CORS handling.
+  const captureMap=()=>new Promise((resolve,reject)=>{
+    const map=mapRef?.current;
+    if(!map||!window.leafletImage){reject(new Error("Map not ready for export"));return;}
+    window.leafletImage(map,(err,canvas)=>{
+      if(err){reject(err);return;}
+      resolve(canvas);
+    });
+  });
 
   const doExport=async mode=>{
     onClose();
     await new Promise(r=>setTimeout(r,350));
     setExporting(true);
     try{
-      let target;
-      if(mode==="map") target=mapDivRef.current;
-      else if(mode==="dashboard") target=dashboardRef.current||editorRef.current;
-      else target=dashboardRef.current||editorRef.current; // pdf
-      const canvas=await window.html2canvas(target,{useCORS:true,allowTaint:true,scale:2,logging:false,
-        ignoreElements:el=>el.classList?.contains('leaflet-control-zoom')});
+      if(mode==="map"){
+        const mapCanvas=await captureMap();
+        const a=document.createElement("a");
+        a.href=mapCanvas.toDataURL("image/png");
+        a.download=`${projectTitle||"geocore"}_map.png`;
+        a.click();
+        return;
+      }
+
+      // dashboard / pdf: capture the map separately (tiles render correctly),
+      // hide the live map div so html2canvas leaves a clean gap behind it,
+      // then composite the map image into that gap.
+      const target=dashboardRef.current||editorRef.current;
+      const mapDiv=mapDivRef?.current;
+      let mapCanvas=null,mapRect=null,targetRect=null;
+      try{mapCanvas=await captureMap();}catch{/* map may not be present in this view */}
+
+      if(mapDiv&&mapCanvas){
+        mapRect=mapDiv.getBoundingClientRect();
+        targetRect=target.getBoundingClientRect();
+      }
+
+      const prevVisibility=mapDiv?.style.visibility;
+      if(mapDiv) mapDiv.style.visibility="hidden";
+
+      let canvas;
+      try{
+        canvas=await window.html2canvas(target,{useCORS:true,allowTaint:true,scale:2,logging:false,
+          ignoreElements:el=>el.classList?.contains('leaflet-control-zoom')});
+      }finally{
+        if(mapDiv) mapDiv.style.visibility=prevVisibility||"";
+      }
+
+      // Composite the map screenshot into the gap left where mapDiv was.
+      if(mapCanvas&&mapRect&&targetRect){
+        const ctx=canvas.getContext("2d");
+        const scaleX=canvas.width/targetRect.width;
+        const scaleY=canvas.height/targetRect.height;
+        const dx=(mapRect.left-targetRect.left)*scaleX;
+        const dy=(mapRect.top-targetRect.top)*scaleY;
+        const dw=mapRect.width*scaleX;
+        const dh=mapRect.height*scaleY;
+        ctx.drawImage(mapCanvas,0,0,mapCanvas.width,mapCanvas.height,dx,dy,dw,dh);
+      }
+
       if(mode==="pdf"){
         const pdf=new window.jspdf.jsPDF({orientation:"landscape",unit:"px",format:[canvas.width/2,canvas.height/2]});
         pdf.addImage(canvas.toDataURL("image/png"),"PNG",0,0,canvas.width/2,canvas.height/2);
@@ -1191,7 +1562,7 @@ function MapSlotWrapper({gridArea,mapProps,isDark}){
    Renders selected layout template with
    independently configured widgets per slot.
 ═══════════════════════════════════════════ */
-function LayoutView({layoutKey,slots,onSlotChange,layers,visibleFeatsByLayer,mapProps,isDark,dashRef}){
+function LayoutView({layoutKey,slots,onSlotChange,layers,visibleFeatsByLayer,mapProps,isDark,dashRef,applyFilters}){
   const tpl=LAYOUT_TEMPLATES[layoutKey];
 
   // Map slot names to grid-area values per template
@@ -1224,7 +1595,7 @@ function LayoutView({layoutKey,slots,onSlotChange,layers,visibleFeatsByLayer,map
         <div style={{flex:1,minHeight:0,overflow:"hidden"}}>
           <ChartWidget layers={layers} visibleFeatsByLayer={visibleFeatsByLayer}
             config={slotCfg} onConfigChange={p=>onSlotChange(slotKey,{...slotCfg,...p})}
-            isDark={isDark} compact={true}/>
+            isDark={isDark} compact={true} applyFilters={applyFilters}/>
         </div>
       </div>
     );
@@ -1287,8 +1658,309 @@ function SlotHeader({slotKey,slotCfg,onSlotChange,layers}){
 }
 
 /* ═══════════════════════════════════════════
-   PROJECTS PAGE
+   TILE LAYER MODAL
+   Adds an XYZ/TMS/WMS tile layer by URL
 ═══════════════════════════════════════════ */
+function TileLayerModal({onAdd,onClose,layerCount}){
+  const [name,setName]=useState("Tile Layer");
+  const [url,setUrl]=useState("");
+  const [tms,setTms]=useState(false);
+  const [opacity,setOpacity]=useState(1);
+  const [attrib,setAttrib]=useState("");
+  const [preset,setPreset]=useState("");
+
+  const PRESETS=[
+    {label:"Custom URL…",value:""},
+    {label:"OSM Standard",url:"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",name:"OSM Standard"},
+    {label:"ESRI World Imagery",url:"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",name:"ESRI Imagery",tms:true},
+    {label:"Stamen Terrain",url:"https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.jpg",name:"Stamen Terrain"},
+    {label:"CartoDB Voyager",url:"https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",name:"Voyager"},
+  ];
+
+  const pickPreset=v=>{
+    setPreset(v);
+    const p=PRESETS.find(p=>p.label===v);
+    if(p?.url){setUrl(p.url);setName(p.name||"Tile Layer");setTms(p.tms||false);}
+  };
+
+  const valid=url.trim().length>0&&(url.includes("{z}")||url.includes("{Z}"));
+
+  const submit=()=>{
+    if(!valid) return;
+    onAdd({
+      id:Date.now()+Math.random(),
+      name:name.trim()||"Tile Layer",
+      type:"tile",
+      tileUrl:url.trim(),
+      tileTMS:tms,
+      tileOpacity:opacity,
+      tileAttrib:attrib.trim(),
+      visible:true,
+      color:"#888",
+      geomType:"Tile",
+    });
+    onClose();
+  };
+
+  const inp=extra=>({background:"var(--panel2)",border:"1.5px solid var(--border)",
+    borderRadius:8,padding:"8px 12px",fontSize:12,color:"var(--text)",
+    fontFamily:"Inter,DM Sans,sans-serif",outline:"none",width:"100%",...extra});
+
+  return(
+    <Modal title="Add Tile Layer" subtitle="XYZ, TMS, or WMS tile service" onClose={onClose} width={480}>
+      <div style={{padding:"14px 18px",display:"flex",flexDirection:"column",gap:12}}>
+        {/* Presets */}
+        <div>
+          <label style={{fontSize:11,fontWeight:600,color:"var(--text-muted)",display:"block",marginBottom:5,fontFamily:"Inter,DM Sans,sans-serif"}}>QUICK PRESET</label>
+          <select value={preset} onChange={e=>pickPreset(e.target.value)} style={inp()}>
+            {PRESETS.map(p=><option key={p.label} value={p.label}>{p.label}</option>)}
+          </select>
+        </div>
+        {/* Name */}
+        <div>
+          <label style={{fontSize:11,fontWeight:600,color:"var(--text-muted)",display:"block",marginBottom:5,fontFamily:"Inter,DM Sans,sans-serif"}}>LAYER NAME</label>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="My tile layer" style={inp()}/>
+        </div>
+        {/* URL */}
+        <div>
+          <label style={{fontSize:11,fontWeight:600,color:"var(--text-muted)",display:"block",marginBottom:5,fontFamily:"Inter,DM Sans,sans-serif"}}>TILE URL TEMPLATE <span style={{color:"var(--accent)"}}>*</span></label>
+          <input value={url} onChange={e=>setUrl(e.target.value)}
+            placeholder="https://example.com/tiles/{z}/{x}/{y}.png"
+            style={inp({fontFamily:"monospace",fontSize:11,borderColor:url&&!valid?"var(--danger)":"var(--border)"})}/>
+          {url&&!valid&&<div style={{fontSize:11,color:"var(--danger)",marginTop:4,fontFamily:"Inter,DM Sans,sans-serif"}}>URL must contain {"{z}"}, {"{x}"}, {"{y}"} placeholders</div>}
+          <div style={{fontSize:10,color:"var(--text-muted)",marginTop:4,fontFamily:"Inter,DM Sans,sans-serif"}}>For WMS: use GetMap URL with BBOX=&#123;bbox-epsg-3857&#125;</div>
+        </div>
+        {/* TMS toggle + opacity */}
+        <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+          <div style={{flex:1}}>
+            <label style={{fontSize:11,fontWeight:600,color:"var(--text-muted)",display:"block",marginBottom:5,fontFamily:"Inter,DM Sans,sans-serif"}}>OPACITY</label>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <input type="range" min="0" max="1" step="0.05" value={opacity} onChange={e=>setOpacity(+e.target.value)} style={{flex:1}}/>
+              <span style={{fontSize:12,fontWeight:700,color:"var(--accent)",minWidth:32,fontFamily:"monospace"}}>{Math.round(opacity*100)}%</span>
+            </div>
+          </div>
+          <div>
+            <label style={{fontSize:11,fontWeight:600,color:"var(--text-muted)",display:"block",marginBottom:5,fontFamily:"Inter,DM Sans,sans-serif"}}>TMS</label>
+            <button onClick={()=>setTms(p=>!p)}
+              style={{padding:"7px 14px",borderRadius:8,fontSize:11,fontWeight:700,border:"1.5px solid var(--border)",
+                cursor:"pointer",fontFamily:"Inter,DM Sans,sans-serif",
+                background:tms?"var(--accent)":"var(--panel2)",color:tms?"#fff":"var(--text-muted)"}}>
+              {tms?"TMS ON":"TMS OFF"}
+            </button>
+          </div>
+        </div>
+        {/* Attribution */}
+        <div>
+          <label style={{fontSize:11,fontWeight:600,color:"var(--text-muted)",display:"block",marginBottom:5,fontFamily:"Inter,DM Sans,sans-serif"}}>ATTRIBUTION (optional)</label>
+          <input value={attrib} onChange={e=>setAttrib(e.target.value)} placeholder="© My Data Source" style={inp()}/>
+        </div>
+      </div>
+      <div style={{padding:"12px 18px",borderTop:"1px solid var(--border)",display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <button onClick={onClose} style={{padding:"8px 20px",borderRadius:9,border:"1.5px solid var(--border)",background:"transparent",color:"var(--text-muted)",cursor:"pointer",fontSize:12,fontFamily:"Inter,DM Sans,sans-serif"}}>Cancel</button>
+        <button onClick={submit} disabled={!valid}
+          style={{padding:"8px 24px",borderRadius:9,border:"none",background:valid?"var(--accent)":"var(--border)",
+            color:valid?"#fff":"var(--text-muted)",cursor:valid?"pointer":"not-allowed",fontSize:12,fontWeight:700,fontFamily:"Inter,DM Sans,sans-serif"}}>
+          Add Layer
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   ANALYSIS MODAL
+   Buffer, Centroid, Dissolve tools
+═══════════════════════════════════════════ */
+function AnalysisModal({layers,onAddLayer,onClose}){
+  const [tool,setTool]=useState("buffer");
+  const [srcId,setSrcId]=useState(layers[0]?.id||"");
+  const [bufDist,setBufDist]=useState(500);
+  const [bufUnit,setBufUnit]=useState("meters");
+  const [bufSteps,setBufSteps]=useState(64);
+  const [dissolveField,setDissolveField]=useState("");
+  const [outName,setOutName]=useState("");
+  const [running,setRunning]=useState(false);
+  const [error,setError]=useState("");
+
+  const srcLayer=layers.find(l=>String(l.id)===String(srcId))||layers[0];
+  const fields=useMemo(()=>Object.keys(srcLayer?.geojson?.features?.[0]?.properties||{}),[srcLayer]);
+
+  const TOOLS=[
+    {id:"buffer",  label:"Buffer",    icon:"⬡", desc:"Expand features outward by a distance"},
+    {id:"centroid",label:"Centroid",  icon:"⊙", desc:"Convert polygons/lines to centre points"},
+    {id:"dissolve",label:"Dissolve",  icon:"⬟", desc:"Merge features sharing the same field value"},
+  ];
+
+  const run=async()=>{
+    if(!srcLayer||!window.turf){setError("Turf.js not loaded yet, please wait a moment.");return;}
+    setRunning(true);setError("");
+    try{
+      const turf=window.turf;
+      let result;
+      const name=outName.trim()||`${srcLayer.name}_${tool}`;
+
+      if(tool==="buffer"){
+        const rawDist=Math.abs(bufDist); // ensure positive → always outward
+        const distKm=bufUnit==="meters"?rawDist/1000:bufUnit==="km"?rawDist:rawDist*1.60934;
+        if(distKm<=0){setError("Buffer distance must be greater than 0.");setRunning(false);return;}
+        // Buffer each feature individually to avoid winding-order issues with some polygon types
+        const buffered=srcLayer.geojson.features.map(f=>{
+          try{ return turf.buffer(f,distKm,{units:"kilometers",steps:bufSteps}); }catch{return null;}
+        }).filter(Boolean);
+        result={type:"FeatureCollection",features:buffered};
+      } else if(tool==="centroid"){
+        const centroids=srcLayer.geojson.features.map(f=>{
+          try{
+            const c=turf.centroid(f,{properties:f.properties});
+            return c;
+          }catch{return null;}
+        }).filter(Boolean);
+        result={type:"FeatureCollection",features:centroids};
+      } else if(tool==="dissolve"){
+        if(!dissolveField){setError("Select a field to dissolve by.");setRunning(false);return;}
+        result=turf.dissolve(srcLayer.geojson,{propertyName:dissolveField});
+      }
+
+      if(!result?.features?.length){setError("Result has no features — check input layer.");setRunning(false);return;}
+
+      const newLayer={
+        id:Date.now()+Math.random(),
+        name,
+        geojson:result,
+        visible:true,
+        type:"vector",
+        geomType:detectGeomType(result),
+        color:CHART_PALETTE[layers.length%CHART_PALETTE.length],
+      };
+      onAddLayer(newLayer);
+      onClose();
+    }catch(e){setError("Analysis failed: "+e.message);}
+    finally{setRunning(false);}
+  };
+
+  const inp=extra=>({background:"var(--panel2)",border:"1.5px solid var(--border)",
+    borderRadius:8,padding:"7px 11px",fontSize:12,color:"var(--text)",
+    fontFamily:"Inter,DM Sans,sans-serif",outline:"none",...extra});
+  const Lbl=({children})=>(
+    <div style={{fontSize:11,fontWeight:600,color:"var(--text-muted)",
+      marginBottom:5,fontFamily:"Inter,DM Sans,sans-serif",letterSpacing:"0.06em"}}>{children}</div>
+  );
+
+  return(
+    <Modal title="Analysis Tools" subtitle="Create new layers from spatial operations" onClose={onClose} width={460}>
+      {/* Tool tabs */}
+      <div style={{display:"flex",borderBottom:"1.5px solid var(--border)",padding:"0 18px",gap:4,overflowX:"auto"}}>
+        {TOOLS.map(t=>(
+          <button key={t.id} onClick={()=>{setTool(t.id);setError("");}}
+            style={{padding:"10px 14px",border:"none",background:"none",cursor:"pointer",
+              fontFamily:"Inter,DM Sans,sans-serif",fontSize:12,fontWeight:tool===t.id?700:400,
+              color:tool===t.id?"var(--accent)":"var(--text-muted)",
+              borderBottom:tool===t.id?"2.5px solid var(--accent)":"2.5px solid transparent",
+              whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5}}>
+            <span>{t.icon}</span>{t.label}
+          </button>
+        ))}
+      </div>
+      <div style={{padding:"14px 18px",flex:1,overflowY:"auto"}}>
+        {/* Tool description */}
+        <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:14,padding:"8px 12px",
+          background:"var(--panel2)",borderRadius:8,fontFamily:"Inter,DM Sans,sans-serif",
+          borderLeft:"3px solid var(--accent)"}}>
+          {TOOLS.find(t=>t.id===tool)?.desc}
+        </div>
+
+        {/* Source layer */}
+        <div style={{marginBottom:12}}>
+          <Lbl>INPUT LAYER</Lbl>
+          <select value={srcId} onChange={e=>setSrcId(e.target.value)} style={inp({width:"100%"})}>
+            {layers.filter(l=>l.type!=="tile").map(l=>(
+              <option key={l.id} value={String(l.id)}>{l.name} ({l.geomType})</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Tool-specific controls */}
+        {tool==="buffer"&&(
+          <>
+            <div style={{display:"flex",gap:10,marginBottom:12}}>
+              <div style={{flex:2}}>
+                <Lbl>DISTANCE</Lbl>
+                <input type="number" value={bufDist} min="0" onChange={e=>setBufDist(+e.target.value)} style={inp({width:"100%"})}/>
+              </div>
+              <div style={{flex:1}}>
+                <Lbl>UNIT</Lbl>
+                <select value={bufUnit} onChange={e=>setBufUnit(e.target.value)} style={inp({width:"100%"})}>
+                  <option value="meters">Meters</option>
+                  <option value="km">Kilometers</option>
+                  <option value="miles">Miles</option>
+                </select>
+              </div>
+            </div>
+            <div style={{marginBottom:12}}>
+              <Lbl>SMOOTHNESS (steps: {bufSteps})</Lbl>
+              <input type="range" min="8" max="128" step="8" value={bufSteps}
+                onChange={e=>setBufSteps(+e.target.value)} style={{width:"100%"}}/>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"var(--text-muted)",marginTop:2,fontFamily:"monospace"}}>
+                <span>8 (fast)</span><span>64 (smooth)</span><span>128 (precise)</span>
+              </div>
+            </div>
+          </>
+        )}
+        {tool==="dissolve"&&(
+          <div style={{marginBottom:12}}>
+            <Lbl>DISSOLVE BY FIELD</Lbl>
+            <select value={dissolveField} onChange={e=>setDissolveField(e.target.value)} style={inp({width:"100%"})}>
+              <option value="">— select field —</option>
+              {fields.map(f=><option key={f} value={f}>{f}</option>)}
+            </select>
+            <div style={{fontSize:11,color:"var(--text-muted)",marginTop:4,fontFamily:"Inter,DM Sans,sans-serif"}}>
+              Features sharing the same value in this field will be merged.
+            </div>
+          </div>
+        )}
+        {tool==="centroid"&&(
+          <div style={{padding:"8px 12px",background:"var(--accent-soft)",borderRadius:8,
+            fontSize:12,color:"var(--accent)",fontFamily:"Inter,DM Sans,sans-serif",marginBottom:12}}>
+            Creates a point at the geometric centre of each feature. All original attributes are preserved.
+          </div>
+        )}
+
+        {/* Output name */}
+        <div style={{marginBottom:12}}>
+          <Lbl>OUTPUT LAYER NAME</Lbl>
+          <input value={outName} onChange={e=>setOutName(e.target.value)}
+            placeholder={`${srcLayer?.name||"layer"}_${tool}`}
+            style={inp({width:"100%"})}/>
+        </div>
+
+        {error&&(
+          <div style={{padding:"8px 12px",background:"rgba(224,82,82,0.1)",border:"1px solid var(--danger)",
+            borderRadius:8,fontSize:12,color:"var(--danger)",fontFamily:"Inter,DM Sans,sans-serif",marginBottom:8}}>
+            ⚠ {error}
+          </div>
+        )}
+      </div>
+      <div style={{padding:"12px 18px",borderTop:"1px solid var(--border)",display:"flex",gap:10,justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:11,color:"var(--text-muted)",fontFamily:"Inter,DM Sans,sans-serif"}}>
+          Result added as a new layer
+        </span>
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={onClose} style={{padding:"8px 20px",borderRadius:9,border:"1.5px solid var(--border)",background:"transparent",color:"var(--text-muted)",cursor:"pointer",fontSize:12,fontFamily:"Inter,DM Sans,sans-serif"}}>Cancel</button>
+          <button onClick={run} disabled={running||!srcLayer}
+            style={{padding:"8px 24px",borderRadius:9,border:"none",display:"flex",alignItems:"center",gap:7,
+              background:(running||!srcLayer)?"var(--border)":"var(--accent)",
+              color:(running||!srcLayer)?"var(--text-muted)":"#fff",
+              cursor:(running||!srcLayer)?"not-allowed":"pointer",fontSize:12,fontWeight:700,fontFamily:"Inter,DM Sans,sans-serif"}}>
+            {running&&<div style={{width:13,height:13,border:"2px solid rgba(255,255,255,0.4)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>}
+            {running?"Running…":"Run "+TOOLS.find(t=>t.id===tool)?.label}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+
 function ProjectsPage({onOpen,theme,onThemeToggle}){
   const [projects,setProjects]=useState([]);
   const [creating,setCreating]=useState(false);
@@ -1305,7 +1977,8 @@ function ProjectsPage({onOpen,theme,onThemeToggle}){
       name:newName.trim(),createdAt:Date.now(),updatedAt:Date.now(),
       layers:[],filters:[],basemap:"Satellite",logoUrl:null,
       showLabels:false,labelField:"",
-      customColorMap:{},customShapeMap:{},customOpacityMap:{},layerOpacity:{},
+      customColorMap:{},customShapeMap:{},customOpacityMap:{},customSizeMap:{},
+      customOutlineColorMap:{},customOutlineWidthMap:{},customHollowMap:{},layerOpacity:{},
       primaryLayerId:null,primaryField:"",
       sidebarCharts:[{id:"c1",layerId:null,field:"",chartType:"bar",chartMode:"count"}],
       layoutKey:"classic",layoutSlots:{},
@@ -1471,12 +2144,26 @@ function ProjectsPage({onOpen,theme,onThemeToggle}){
 function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
   const mapRef=useRef(null),mapDivRef=useRef(null),tileRef=useRef(null);
   const geoLayerRef=useRef(null),labelLayerRef=useRef(null),measureRef=useRef(null);
+  const tileLayersRef=useRef({}); // id→L.tileLayer for custom tile layers
   const boundsTimer=useRef(null),saveTimer=useRef(null),dashRef=useRef(null);
   const editorBodyRef=useRef(null);
 
   const [project]       =useState(initProject);
   const [layers,setLayers]=useState(initProject.layers||[]);
-  const [filters,setFilters]=useState(initProject.filters||[]);
+  // Migrate old flat filter format [{id,field,op,val}] → new group format
+  const migrateFilters=raw=>{
+    if(!Array.isArray(raw)||!raw.length) return [];
+    // Already new format — has .rules array
+    if(raw[0]?.rules) return raw;
+    // Old format — wrap each rule in its own OR group
+    return raw.map(f=>({
+      id:f.id||Date.now()+Math.random(),
+      layerId:"all",groupOp:"OR",
+      rules:[{id:(f.id||Date.now())+1,field:f.field||"",op:f.op==="="?"=":"=",val:f.val||"",vals:f.val?[f.val]:[]}]
+    }));
+  };
+
+  const [filters,setFilters]=useState(()=>migrateFilters(initProject.filters||[]));
 
   // Per-layer visible features — keyed by String(layer.id)
   // Pre-populate with all features so charts & counts show immediately
@@ -1488,6 +2175,13 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
     return init;
   });
 
+  // All layer features map for FilterPanel per-layer value previews
+  const allLayerFeatures=useMemo(()=>{
+    const m={};
+    layers.forEach(l=>{if(l.geojson?.features) m[String(l.id)]=l.geojson.features;});
+    return m;
+  },[layers]);
+
   // Sidebar charts — each is fully self-contained
   const [sidebarCharts,setSidebarCharts]=useState(
     initProject.sidebarCharts?.length
@@ -1495,15 +2189,27 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
       : [{id:"c1",layerId:null,field:"",chartType:"bar",chartMode:"count"}]
   );
 
-  // Symbology — per layer, per category value
+  // Symbology — per layer, per category: { [layerId]: { [cat]: value } }
   const [customColorMap,setCustomColorMap]=useState(initProject.customColorMap||{});
   const [customShapeMap,setCustomShapeMap]=useState(initProject.customShapeMap||{});
   const [customOpacityMap,setCustomOpacityMap]=useState(initProject.customOpacityMap||{});
+  const [customSizeMap,setCustomSizeMap]=useState(initProject.customSizeMap||{});
+  const [customOutlineColorMap,setCustomOutlineColorMap]=useState(initProject.customOutlineColorMap||{});
+  const [customOutlineWidthMap,setCustomOutlineWidthMap]=useState(initProject.customOutlineWidthMap||{});
+  const [customHollowMap,setCustomHollowMap]=useState(initProject.customHollowMap||{});
   const [layerOpacity,setLayerOpacity]=useState(initProject.layerOpacity||{});
 
   // Which layer drives map symbology
   const [primaryLayerId,setPrimaryLayerId]=useState(initProject.primaryLayerId||null);
   const [primaryField,setPrimaryField]=useState(initProject.primaryField||"");
+  // Remembers the chosen classification field per layer, so switching layers
+  // and switching back restores the same field (and therefore the same
+  // category keys used by the per-layer custom symbol maps).
+  const [primaryFieldMap,setPrimaryFieldMap]=useState(initProject.primaryFieldMap||{});
+
+  // Per-layer symbol accessors — derive after primaryLayerId is declared
+  // customColorMap shape: { [layerId]: { [cat]: value } }
+  // These are computed inline in render; defined as stable refs via useCallback later.
 
   // Dashboard layout
   const [layoutKey,setLayoutKey]=useState(initProject.layoutKey||"classic");
@@ -1531,6 +2237,8 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
   const [symbolEditorOpen,setSymbolEditorOpen]=useState(false);
   const [filterPanelOpen,setFilterPanelOpen]=useState(false);
   const [exportOpen,setExportOpen]=useState(false);
+  const [tileModalOpen,setTileModalOpen]=useState(false);
+  const [analysisOpen,setAnalysisOpen]=useState(false);
   const [coordDisplay,setCoordDisplay]=useState("—");
 
   const logoInputRef=useRef(null);
@@ -1579,35 +2287,43 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
     try{
       await dbPut({...project,name:projectTitle,layers,filters,basemap,logoUrl,
         showLabels,labelField,sidebarCharts,
-        customColorMap,customShapeMap,customOpacityMap,layerOpacity,
-        primaryLayerId,primaryField,layoutKey,layoutSlots,updatedAt:Date.now()});
+        customColorMap,customShapeMap,customOpacityMap,customSizeMap,
+        customOutlineColorMap,customOutlineWidthMap,customHollowMap,
+        layerOpacity,
+        primaryLayerId,primaryField,primaryFieldMap,layoutKey,layoutSlots,updatedAt:Date.now()});
     }catch(e){console.error(e);}finally{setSaving(false);}
   },[project,projectTitle,layers,filters,basemap,logoUrl,showLabels,labelField,
-     sidebarCharts,customColorMap,customShapeMap,customOpacityMap,layerOpacity,
-     primaryLayerId,primaryField,layoutKey,layoutSlots]);
+     sidebarCharts,customColorMap,customShapeMap,customOpacityMap,customSizeMap,
+     customOutlineColorMap,customOutlineWidthMap,customHollowMap,
+     layerOpacity,primaryLayerId,primaryField,primaryFieldMap,layoutKey,layoutSlots]);
 
   useEffect(()=>{clearTimeout(saveTimer.current);saveTimer.current=setTimeout(saveProject,2000);},[
-    layers,filters,sidebarCharts,customColorMap,customShapeMap,customOpacityMap,layerOpacity,
-    basemap,projectTitle,showLabels,labelField,primaryLayerId,primaryField,layoutKey,layoutSlots]);
+    layers,filters,sidebarCharts,customColorMap,customShapeMap,customOpacityMap,customSizeMap,
+    customOutlineColorMap,customOutlineWidthMap,customHollowMap,
+    layerOpacity,basemap,projectTitle,showLabels,labelField,primaryLayerId,primaryField,primaryFieldMap,layoutKey,layoutSlots]);
+
+  /* Always-fresh ref so the Leaflet moveend listener never captures a stale closure */
+  const updateAllVisibleRef=useRef(null);
 
   /* Init Leaflet */
   useEffect(()=>{
     if(!mapDivRef.current) return;
-    // Destroy old instance if exists (handles re-opening a project)
     if(mapRef.current){mapRef.current.remove();mapRef.current=null;}
     const L=window.L;
-    mapDivRef.current.style.display="none"; // hidden until MapSlot positions it
+    mapDivRef.current.style.display="none";
     mapDivRef.current.style.position="absolute";
     mapDivRef.current.style.zIndex="10";
     const map=L.map(mapDivRef.current,{center:RWANDA.center,zoom:RWANDA.zoom,zoomControl:false,preferCanvas:true});
     tileRef.current=L.tileLayer(BASEMAPS[basemap],{maxZoom:20}).addTo(map);
     L.control.scale({imperial:false,position:"bottomleft"}).addTo(map);
     map.on("mousemove",e=>setCoordDisplay(`${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`));
-    map.on("moveend zoomend",()=>{clearTimeout(boundsTimer.current);boundsTimer.current=setTimeout(()=>updateAllVisible(map.getBounds()),130);});
+    // Call through ref — always uses the latest updateAllVisible (no stale closure)
+    map.on("moveend zoomend",()=>{
+      clearTimeout(boundsTimer.current);
+      boundsTimer.current=setTimeout(()=>updateAllVisibleRef.current(map.getBounds()),130);
+    });
     mapRef.current=map;
-    return()=>{
-      if(mapRef.current){mapRef.current.remove();mapRef.current=null;}
-    };
+    return()=>{if(mapRef.current){mapRef.current.remove();mapRef.current=null;}};
   },[]);
 
   /* Invalidate map size whenever layout changes (view toggle, sidebar hide, layout switch) */
@@ -1657,21 +2373,14 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
   },[measureMode]);
 
   /* Filters */
-  const applyFilters=useCallback(features=>{
+  const applyFilters=useCallback((features,layerId="all")=>{
     if(!filters.length) return features;
-    return features.filter(f=>filters.every(fi=>{
-      const v=String(f.properties?.[fi.field]??"");
-      if(fi.op==="=")return v===fi.val;if(fi.op==="≠")return v!==fi.val;
-      if(fi.op==="contains")return v.toLowerCase().includes(fi.val.toLowerCase());
-      if(fi.op==="starts")return v.toLowerCase().startsWith(fi.val.toLowerCase());
-      return true;
-    }));
+    return features.filter(f=>passesAllFilters(filters,f,layerId));
   },[filters]);
 
-  /* Update visible features for ALL layers independently */
   const updateAllVisible=useCallback(bounds=>{
     const result={};
-    layers.forEach(layer=>{
+    layers.filter(l=>l.type!=="tile").forEach(layer=>{
       if(!layer.geojson) return;
       const raw=(layer.geojson.features||[]).filter(f=>{
         if(!f.geometry) return false;
@@ -1684,10 +2393,12 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
         if(gt==="MultiPolygon")return c.flat(2).some(p=>bounds.contains([p[1],p[0]]));
         return true;
       });
-      result[String(layer.id)]=applyFilters(raw);
+      result[String(layer.id)]=applyFilters(raw,String(layer.id));
     });
     setVisibleFeatsByLayer(result);
   },[layers,applyFilters]);
+
+  useEffect(()=>{updateAllVisibleRef.current=updateAllVisible;},[updateAllVisible]);
 
   useEffect(()=>{
     if(!mapRef.current) return;
@@ -1707,33 +2418,66 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
     const L=window.L;
     if(geoLayerRef.current){geoLayerRef.current.remove();geoLayerRef.current=null;}
     if(labelLayerRef.current){labelLayerRef.current.remove();labelLayerRef.current=null;}
-    const vis=layers.filter(l=>l.visible);if(!vis.length) return;
+    const vis=layers.filter(l=>l.visible&&l.type!=="tile");if(!vis.length) return;
 
-    // Build color map for primary layer on the fly
+    // Build per-layer color maps on the fly
+    // customColorMap shape: { [layerId]: { [cat]: color } }
     const primaryLayer=layers.find(l=>String(l.id)===String(primaryLayerId))||layers[0];
-    const baseColors=buildColorMap(primaryLayer?.geojson?.features||[],primaryField);
-    const mergedColors={...baseColors,...customColorMap};
 
-    const allFeats=vis.flatMap(l=>(l.geojson?.features||[]).map(f=>({
-      ...f,_lid:l.id,_lcolor:l.color,_lgeom:l.geomType||"Point",
-      _isPrimary:String(l.id)===String(primaryLayer?.id),
-    })));
-    const toRender=applyFilters(allFeats);
+    // Pre-compute base color maps for all visible layers
+    const layerBaseMaps={};
+    vis.forEach(l=>{
+      const lid=String(l.id);
+      layerBaseMaps[lid]=buildColorMap(l.geojson?.features||[],primaryField);
+    });
+
+    const allFeats=vis.flatMap(l=>{
+      const layerFeats=(l.geojson?.features||[]).map(f=>({
+        ...f,_lid:l.id,_lcolor:l.color,_lgeom:l.geomType||"Point",
+        _isPrimary:String(l.id)===String(primaryLayer?.id),
+      }));
+      return applyFilters(layerFeats,String(l.id));
+    });
+    const toRender=allFeats;
 
     geoLayerRef.current=L.geoJSON({type:"FeatureCollection",features:toRender},{
       style:f=>{
-        const val=f._isPrimary&&primaryField&&f.properties?.[primaryField]?String(f.properties[primaryField]):null;
-        const col=(val&&mergedColors[val])||f._lcolor||"#C8922A";
-        const opacity=val?(customOpacityMap[val]??0.85):0.85;
+        const lid=String(f._lid);
+        const lCustomColors=customColorMap[lid]||{};
+        const lCustomOutlineColors=customOutlineColorMap[lid]||{};
+        const lCustomOutlineWidths=customOutlineWidthMap[lid]||{};
+        const lCustomHollow=customHollowMap[lid]||{};
+        const lCustomOpacity=customOpacityMap[lid]||{};
+        const baseColors=layerBaseMaps[lid]||{};
+        const mergedColors={...baseColors,...lCustomColors};
+        const val=primaryField&&f.properties?.[primaryField]?String(f.properties[primaryField]):null;
+        const fillCol=(val&&mergedColors[val])||f._lcolor||"#C8922A";
+        const outlineCol=(val&&lCustomOutlineColors[val])||fillCol;
+        const outlineW=(val&&lCustomOutlineWidths[val])||( f._lgeom==="Line"?2.5:1.5);
+        const hollow=val&&lCustomHollow[val];
+        const opacity=hollow?0:(val?(lCustomOpacity[val]??0.85):0.85);
         const lop=layerOpacity[f._lid]??1;
-        return{color:col,weight:f._lgeom==="Line"?2.5:1.5,fillColor:col,fillOpacity:opacity*lop,opacity:lop};
+        return{
+          color:outlineCol,
+          weight:outlineW,
+          fillColor:hollow?"transparent":fillCol,
+          fillOpacity:opacity*lop,
+          opacity:lop,
+        };
       },
       pointToLayer:(f,latlng)=>{
-        const val=f._isPrimary&&primaryField&&f.properties?.[primaryField]?String(f.properties[primaryField]):null;
+        const lid=String(f._lid);
+        const lCustomColors=customColorMap[lid]||{};
+        const lCustomShapes=customShapeMap[lid]||{};
+        const lCustomSizes=customSizeMap[lid]||{};
+        const baseColors=layerBaseMaps[lid]||{};
+        const mergedColors={...baseColors,...lCustomColors};
+        const val=primaryField&&f.properties?.[primaryField]?String(f.properties[primaryField]):null;
         const col=(val&&mergedColors[val])||f._lcolor||"#C8922A";
-        const shape=(val&&customShapeMap[val])||"circle";
+        const shape=(val&&lCustomShapes[val])||"circle";
+        const sz=(val&&lCustomSizes[val])||16;
         return L.marker(latlng,{
-          icon:L.divIcon({html:makePointSVG(shape,col,16),className:"geo-div-icon",iconSize:[16,16],iconAnchor:[8,8]}),
+          icon:L.divIcon({html:makePointSVG(shape,col,sz),className:"geo-div-icon",iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]}),
           opacity:layerOpacity[f._lid]??1,
         });
       },
@@ -1776,10 +2520,42 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
       });
       lg.addTo(mapRef.current);labelLayerRef.current=lg;
     }
-  },[layers,customColorMap,customShapeMap,customOpacityMap,layerOpacity,
-     primaryLayerId,primaryField,showLabels,labelField,applyFilters]);
+  },[layers,customColorMap,customShapeMap,customOpacityMap,customSizeMap,
+     customOutlineColorMap,customOutlineWidthMap,customHollowMap,
+     layerOpacity,primaryLayerId,primaryField,showLabels,labelField,applyFilters]);
 
-  /* Fit to active layer */
+  /* Sync custom tile layers (type:"tile") on the map */
+  useEffect(()=>{
+    if(!mapRef.current) return;
+    const L=window.L;
+    const map=mapRef.current;
+    const existing=tileLayersRef.current;
+
+    // Remove tile layers that are no longer in state
+    Object.keys(existing).forEach(id=>{
+      if(!layers.find(l=>String(l.id)===id&&l.type==="tile")){
+        existing[id]?.remove();
+        delete existing[id];
+      }
+    });
+
+    // Add/update tile layers
+    layers.filter(l=>l.type==="tile").forEach(l=>{
+      const lid=String(l.id);
+      if(existing[lid]) {
+        // Update opacity and visibility
+        existing[lid].setOpacity(l.visible?(l.tileOpacity??1):0);
+      } else if(l.tileUrl) {
+        const tl=L.tileLayer(l.tileUrl,{
+          maxZoom:22,opacity:l.visible?(l.tileOpacity??1):0,
+          attribution:l.tileAttrib||"",
+          tms:l.tileTMS||false,
+          zIndex:5,
+        }).addTo(map);
+        existing[lid]=tl;
+      }
+    });
+  },[layers]);
   useEffect(()=>{
     if(!mapRef.current||!activeLayer?.geojson?.features?.length) return;
     try{const b=window.L.geoJSON(activeLayer.geojson).getBounds();if(b.isValid())mapRef.current.fitBounds(b,{padding:[40,40]});}catch{}
@@ -1791,9 +2567,12 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
     const name=file.name.replace(/\.[^.]+$/,"");
     setLoadMsg(`Parsing ${file.name}…`);
     let geojson;
-    if(ext==="zip") geojson=await window.shp(await file.arrayBuffer());
-    else if(ext==="geojson"||ext==="json") geojson=JSON.parse(await file.text());
-    else if(ext==="csv"){
+
+    if(ext==="zip") {
+      geojson=await window.shp(await file.arrayBuffer());
+    } else if(ext==="geojson"||ext==="json") {
+      geojson=JSON.parse(await file.text());
+    } else if(ext==="csv"){
       const res=window.Papa.parse(await file.text(),{header:true,dynamicTyping:true,skipEmptyLines:true});
       const latK=["lat","latitude","y","LAT","LATITUDE"].find(k=>res.meta.fields?.includes(k));
       const lonK=["lon","lng","longitude","x","LON","LNG","LONGITUDE"].find(k=>res.meta.fields?.includes(k));
@@ -1801,9 +2580,29 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
       geojson={type:"FeatureCollection",features:res.data.filter(d=>d[latK]&&d[lonK]).map(d=>({
         type:"Feature",properties:d,geometry:{type:"Point",coordinates:[+d[lonK],+d[latK]]},
       }))};
-    } else throw new Error("Unsupported: "+ext);
+    } else if(ext==="kml") {
+      const text=await file.text();
+      const dom=new DOMParser().parseFromString(text,"text/xml");
+      geojson=window.toGeoJSON.kml(dom);
+    } else if(ext==="kmz") {
+      const zip=await window.JSZip.loadAsync(await file.arrayBuffer());
+      // Find the first .kml entry inside the KMZ
+      const kmlName=Object.keys(zip.files).find(n=>n.toLowerCase().endsWith(".kml"));
+      if(!kmlName) throw new Error("No KML found inside KMZ");
+      const kmlText=await zip.files[kmlName].async("string");
+      const dom=new DOMParser().parseFromString(kmlText,"text/xml");
+      geojson=window.toGeoJSON.kml(dom);
+    } else {
+      throw new Error("Unsupported format: "+ext+". Supported: .zip (Shapefile), .geojson, .json, .csv, .kml, .kmz");
+    }
+
+    // Ensure FeatureCollection
+    if(geojson.type==="Feature") geojson={type:"FeatureCollection",features:[geojson]};
+    if(!geojson.features) throw new Error("Could not parse features from "+file.name);
+
     const gType=detectGeomType(geojson);
     return{id:Date.now()+Math.random(),name,geojson,visible:true,geomType:gType,
+      type:"vector", // explicit type for future tile layer distinction
       color:CHART_PALETTE[layers.length%CHART_PALETTE.length]};
   };
 
@@ -1837,6 +2636,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
 
   const toggleLayer=id=>setLayers(p=>p.map(l=>l.id===id?{...l,visible:!l.visible}:l));
   const removeLayer=id=>setLayers(p=>p.filter(l=>l.id!==id));
+  const addLayer=layer=>setLayers(p=>[...p,layer]);
 
   const addSidebarChart=()=>{
     if(sidebarCharts.length>=4) return;
@@ -1870,7 +2670,9 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
   },[layoutKey]);
 
   /* Map props bundled for MapPanel */
-  const mapProps={mapDivRef,layers,visibleFeatsByLayer,customColorMap,customShapeMap,customOpacityMap,
+  const mapProps={mapDivRef,layers,visibleFeatsByLayer,
+    customColorMap,customShapeMap,customOpacityMap,customSizeMap,
+    customOutlineColorMap,customOutlineWidthMap,customHollowMap,
     layerOpacity,primaryLayerId,primaryField,applyFilters,basemap,showLabels,labelField,
     measureMode,setMeasureMode,measureResult,setMeasureResult,
     basemapOpen,setBasemapOpen,setBasemap,mapRef};
@@ -1967,16 +2769,32 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
           <Btn onClick={()=>setExportOpen(true)}>
             <Icon name="export" size={13} color="var(--text-muted)"/> Export
           </Btn>
+          <Btn onClick={()=>setAnalysisOpen(true)} title="Spatial analysis tools">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><path d="M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12"/>
+            </svg>
+            Analysis
+          </Btn>
           <Btn onClick={()=>setLayerPanelOpen(p=>!p)} active={layerPanelOpen}>
             <Icon name="layers" size={13} color={layerPanelOpen?"#fff":"var(--text-muted)"}/> Layers
           </Btn>
-          <label style={{display:"flex",alignItems:"center",gap:6,background:"var(--accent)",
-            color:"#fff",padding:"0 14px",height:36,borderRadius:10,cursor:"pointer",
-            fontSize:12,fontWeight:700,letterSpacing:"0.04em",whiteSpace:"nowrap",
+          {/* Split Add Data: vector file upload + tile layer */}
+          <div style={{display:"flex",height:36,borderRadius:10,overflow:"hidden",
             boxShadow:"0 4px 12px rgba(200,146,42,0.35)"}}>
-            <Icon name="upload" size={14} color="#fff"/> Add Data
-            <input type="file" multiple hidden accept=".zip,.geojson,.json,.csv" onChange={handleUpload}/>
-          </label>
+            <label style={{display:"flex",alignItems:"center",gap:6,background:"var(--accent)",
+              color:"#fff",padding:"0 14px",cursor:"pointer",
+              fontSize:12,fontWeight:700,letterSpacing:"0.04em",whiteSpace:"nowrap"}}>
+              <Icon name="upload" size={14} color="#fff"/> Add Data
+              <input type="file" multiple hidden accept=".zip,.geojson,.json,.csv,.kml,.kmz" onChange={handleUpload}/>
+            </label>
+            <button onClick={()=>setTileModalOpen(true)} title="Add tile/raster layer"
+              style={{background:"var(--accent2)",border:"none",borderLeft:"1px solid rgba(255,255,255,0.2)",
+                padding:"0 10px",cursor:"pointer",display:"flex",alignItems:"center",color:"#fff"}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -1998,6 +2816,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
               mapProps={mapProps}
               isDark={isDark}
               dashRef={dashRef}
+              applyFilters={applyFilters}
             />
           </div>
         ):(
@@ -2023,17 +2842,21 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
                       <Icon name="palette" size={11}/> Symbols
                     </button>
                   )}
-                  {layers.length>0&&(
+                  {layers.length>0&&(()=>{
+                    const activeRules=filters.reduce((n,g)=>n+g.rules.filter(r=>
+                      r.op==="in"||r.op==="not_in"?r.vals?.length>0:!!r.val).length,0);
+                    return(
                     <button onClick={()=>setFilterPanelOpen(true)}
                       style={{display:"flex",alignItems:"center",gap:5,
-                        background:filters.length?"var(--accent)":"var(--panel2)",
-                        border:`1.5px solid ${filters.length?"var(--accent)":"var(--border)"}`,
+                        background:activeRules?"var(--accent)":"var(--panel2)",
+                        border:`1.5px solid ${activeRules?"var(--accent)":"var(--border)"}`,
                         borderRadius:7,padding:"4px 10px",cursor:"pointer",fontSize:10,fontWeight:600,
-                        color:filters.length?"#fff":"var(--text-muted)",fontFamily:"inherit"}}>
-                      <Icon name="filter" size={11} color={filters.length?"#fff":"var(--text-muted)"}/>
-                      {filters.length?`${filters.length} Filter`:"Filter"}
+                        color:activeRules?"#fff":"var(--text-muted)",fontFamily:"inherit"}}>
+                      <Icon name="filter" size={11} color={activeRules?"#fff":"var(--text-muted)"}/>
+                      {activeRules?`${activeRules} Filter`:"Filter"}
                     </button>
-                  )}
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -2047,16 +2870,23 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
                   <div style={{display:"flex",gap:6}}>
                     <select value={String(primaryLayerId||"")}
                       onChange={e=>{
-                        setPrimaryLayerId(e.target.value);
-                        const l=layers.find(x=>String(x.id)===e.target.value);
+                        const lid=e.target.value;
+                        setPrimaryLayerId(lid);
+                        const l=layers.find(x=>String(x.id)===lid);
+                        const remembered=primaryFieldMap[lid];
                         const f0=Object.keys(l?.geojson?.features?.[0]?.properties||{})[0];
-                        if(f0){setPrimaryField(f0);setLabelField(f0);}
+                        const f=remembered||f0;
+                        if(f){setPrimaryField(f);setLabelField(f);}
                       }}
                       style={{...ss(),flex:1}}>
                       {layers.map(l=><option key={l.id} value={String(l.id)}>{l.name}</option>)}
                     </select>
                     <select value={primaryField||""}
-                      onChange={e=>setPrimaryField(e.target.value)}
+                      onChange={e=>{
+                        const f=e.target.value;
+                        setPrimaryField(f);
+                        setPrimaryFieldMap(p=>({...p,[String(primaryLayerId)]:f}));
+                      }}
                       style={{...ss(),flex:1}}>
                       <option value="">— field —</option>
                       {fields.map(f=><option key={f} value={f}>{f}</option>)}
@@ -2117,6 +2947,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
                           onConfigChange={patch=>updateSidebarChart(chart.id,patch)}
                           isDark={isDark}
                           compact={false}
+                          applyFilters={applyFilters}
                         />
                       </div>
                     ))}
@@ -2232,17 +3063,23 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
                     transition:"all 0.12s"}}>
                   <div style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",marginBottom:8}}
                     onClick={()=>{
-                      setPrimaryLayerId(String(layer.id));
+                      const lid=String(layer.id);
+                      setPrimaryLayerId(lid);
+                      const remembered=primaryFieldMap[lid];
                       const f0=Object.keys(layer.geojson?.features?.[0]?.properties||{})[0];
-                      if(f0){setPrimaryField(f0);setLabelField(f0);}
+                      const f=remembered||f0;
+                      if(f){setPrimaryField(f);setLabelField(f);}
                     }}>
                     <div style={{width:12,height:12,
-                      borderRadius:layer.geomType==="Polygon"?"3px":layer.geomType==="Line"?"2px":"50%",
-                      background:layer.color,flexShrink:0}}/>
+                      borderRadius:layer.type==="tile"?"2px":layer.geomType==="Polygon"?"3px":layer.geomType==="Line"?"2px":"50%",
+                      background:layer.type==="tile"?"var(--text-muted)":layer.color,flexShrink:0,
+                      border:layer.type==="tile"?"2px dashed var(--border)":"none"}}/>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{layer.name}</div>
                       <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>
-                        {layer.geomType||"?"} · {(layer.geojson?.features?.length||0).toLocaleString()} features
+                        {layer.type==="tile"
+                          ?<span style={{color:"var(--accent)"}}>Tile Layer · {layer.tileUrl?.slice(0,30)}…</span>
+                          :`${layer.geomType||"?"} · ${(layer.geojson?.features?.length||0).toLocaleString()} features`}
                       </div>
                     </div>
                     <button onClick={e=>{e.stopPropagation();toggleLayer(layer.id);}}
@@ -2255,14 +3092,22 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
                       <Icon name="trash" size={14}/>
                     </button>
                   </div>
+                  {/* Opacity row — for tile layers, controls tileOpacity */}
                   <div style={{display:"flex",alignItems:"center",gap:8,paddingLeft:22}}>
                     <Icon name="opacity" size={11} color="var(--text-muted)"/>
-                    <input type="range" min="0" max="1" step="0.05"
-                      value={layerOpacity[layer.id]??1}
-                      onChange={e=>setLayerOpacity(p=>({...p,[layer.id]:+e.target.value}))}
-                      style={{flex:1}}/>
+                    {layer.type==="tile"?(
+                      <input type="range" min="0" max="1" step="0.05"
+                        value={layer.tileOpacity??1}
+                        onChange={e=>setLayers(p=>p.map(l=>l.id===layer.id?{...l,tileOpacity:+e.target.value}:l))}
+                        style={{flex:1}}/>
+                    ):(
+                      <input type="range" min="0" max="1" step="0.05"
+                        value={layerOpacity[layer.id]??1}
+                        onChange={e=>setLayerOpacity(p=>({...p,[layer.id]:+e.target.value}))}
+                        style={{flex:1}}/>
+                    )}
                     <span style={{fontSize:10,color:"var(--text-muted)",minWidth:26,textAlign:"right",fontFamily:"monospace"}}>
-                      {Math.round((layerOpacity[layer.id]??1)*100)}%
+                      {Math.round(((layer.type==="tile"?layer.tileOpacity:layerOpacity[layer.id])??1)*100)}%
                     </span>
                   </div>
                 </div>
@@ -2275,7 +3120,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
                 onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--accent)";e.currentTarget.style.color="var(--accent)";}}
                 onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.color="var(--text-muted)";}}>
                 <Icon name="plus" size={14}/> Add Layer
-                <input type="file" multiple hidden accept=".zip,.geojson,.json,.csv" onChange={handleUpload}/>
+                <input type="file" multiple hidden accept=".zip,.geojson,.json,.csv,.kml,.kmz" onChange={handleUpload}/>
               </label>
             </div>
           </div>
@@ -2286,20 +3131,29 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
       {symbolEditorOpen&&(
         <SymbolEditor
           layer={activeLayer}
-          customColorMap={customColorMap}
-          customShapeMap={customShapeMap}
-          customOpacityMap={customOpacityMap}
+          customColorMap={customColorMap[String(activeLayer?.id)]||{}}
+          customShapeMap={customShapeMap[String(activeLayer?.id)]||{}}
+          customOpacityMap={customOpacityMap[String(activeLayer?.id)]||{}}
+          customSizeMap={customSizeMap[String(activeLayer?.id)]||{}}
+          customOutlineColorMap={customOutlineColorMap[String(activeLayer?.id)]||{}}
+          customOutlineWidthMap={customOutlineWidthMap[String(activeLayer?.id)]||{}}
+          customHollowMap={customHollowMap[String(activeLayer?.id)]||{}}
           primaryField={primaryField}
-          onColorChange={(cat,col)=>setCustomColorMap(p=>({...p,[cat]:col}))}
-          onShapeChange={(cat,shape)=>setCustomShapeMap(p=>({...p,[cat]:shape}))}
-          onOpacityChange={(cat,val)=>setCustomOpacityMap(p=>({...p,[cat]:val}))}
+          onColorChange={(cat,col)=>setCustomColorMap(p=>({...p,[String(activeLayer?.id)]:{...(p[String(activeLayer?.id)]||{}),[cat]:col}}))}
+          onShapeChange={(cat,shape)=>setCustomShapeMap(p=>({...p,[String(activeLayer?.id)]:{...(p[String(activeLayer?.id)]||{}),[cat]:shape}}))}
+          onOpacityChange={(cat,val)=>setCustomOpacityMap(p=>({...p,[String(activeLayer?.id)]:{...(p[String(activeLayer?.id)]||{}),[cat]:val}}))}
+          onSizeChange={(cat,val)=>setCustomSizeMap(p=>({...p,[String(activeLayer?.id)]:{...(p[String(activeLayer?.id)]||{}),[cat]:val}}))}
+          onOutlineColorChange={(cat,val)=>setCustomOutlineColorMap(p=>({...p,[String(activeLayer?.id)]:{...(p[String(activeLayer?.id)]||{}),[cat]:val}}))}
+          onOutlineWidthChange={(cat,val)=>setCustomOutlineWidthMap(p=>({...p,[String(activeLayer?.id)]:{...(p[String(activeLayer?.id)]||{}),[cat]:val}}))}
+          onHollowChange={(cat,val)=>setCustomHollowMap(p=>({...p,[String(activeLayer?.id)]:{...(p[String(activeLayer?.id)]||{}),[cat]:val}}))}
           onClose={()=>setSymbolEditorOpen(false)}
         />
       )}
       {filterPanelOpen&&(
         <FilterPanel
-          fields={fields}
+          layers={layers}
           features={activeLayer?.geojson?.features||[]}
+          allLayerFeatures={allLayerFeatures}
           filters={filters}
           onFiltersChange={setFilters}
           onClose={()=>setFilterPanelOpen(false)}
@@ -2309,6 +3163,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
         <ExportModal
           dashboardRef={dashRef}
           mapDivRef={mapDivRef}
+          mapRef={mapRef}
           editorRef={editorBodyRef}
           projectTitle={projectTitle}
           onClose={()=>setExportOpen(false)}
@@ -2318,6 +3173,20 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
         <LayoutPicker
           onPick={key=>setLayoutKey(key)}
           onClose={()=>setLayoutPickerOpen(false)}
+        />
+      )}
+      {tileModalOpen&&(
+        <TileLayerModal
+          layerCount={layers.length}
+          onAdd={layer=>{addLayer(layer);}}
+          onClose={()=>setTileModalOpen(false)}
+        />
+      )}
+      {analysisOpen&&(
+        <AnalysisModal
+          layers={layers}
+          onAddLayer={addLayer}
+          onClose={()=>setAnalysisOpen(false)}
         />
       )}
     </div>
@@ -2356,7 +3225,8 @@ export default function App(){
       loadScript(CDN.leaflet_js),loadScript(CDN.papaparse),
       loadScript(CDN.chartjs),loadScript(CDN.shpjs),
       loadScript(CDN.html2canvas),loadScript(CDN.jspdf),
-    ]).then(()=>setReady(true)).catch(console.error);
+      loadScript(CDN.togeojson),loadScript(CDN.jszip),loadScript(CDN.turf),
+    ]).then(()=>{setReady(true);return loadScript(CDN.leaflet_image);}).catch(console.error);
   },[]);
 
   const toggleTheme=()=>setTheme(t=>t==="dark"?"light":"dark");
@@ -2381,5 +3251,7 @@ export default function App(){
   if(screen==="projects")
     return <ProjectsPage onOpen={p=>{setProject(p);setScreen("dashboard");}} theme={theme} onThemeToggle={toggleTheme}/>;
 
-  return <Dashboard project={project} onBack={()=>{setScreen("projects");setProject(null);}} theme={theme} onThemeToggle={toggleTheme}/>;
+  if(!project) return null;
+
+  return <Dashboard key={project.id} project={project} onBack={()=>{setScreen("projects");setProject(null);}} theme={theme} onThemeToggle={toggleTheme}/>;
 }

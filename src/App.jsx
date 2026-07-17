@@ -206,6 +206,11 @@ const IP={
   view:   <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>,
   edit2:  <><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>,
   legend: <><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></>,
+  table:  <><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></>,
+  arrowUp:<><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></>,
+  arrowDown:<><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></>,
+  target: <><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>,
+  csv:    <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></>,
 };
 const Icon=({name,size=16,color="currentColor"})=>(
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
@@ -1235,120 +1240,481 @@ function FilterPanel({layers,features,allLayerFeatures,filters,onFiltersChange,o
 }
 
 /* ═══════════════════════════════════════════
-   EXPORT MODAL — dismisses itself before capture
+   ATTRIBUTE TABLE — spreadsheet-style grid
+   Sort, search/filter, select + zoom-to-feature,
+   bulk edit a field across the selection.
 ═══════════════════════════════════════════ */
-function ExportModal({dashboardRef,mapDivRef,mapRef,editorRef,projectTitle,onClose}){
-  const [exporting,setExporting]=useState(false);
+const ATTR_PAGE_SIZE = 100;
 
-  // Capture the live Leaflet map (tiles + vector layers + markers) as a canvas.
-  // html2canvas cannot render cross-origin raster tiles (Google/OSM imagery),
-  // which is why the map area was showing up blank in exports. leaflet-image
-  // fetches/redraws tiles onto a canvas with proper CORS handling.
-  const captureMap=()=>new Promise((resolve,reject)=>{
-    const map=mapRef?.current;
-    if(!map||!window.leafletImage){reject(new Error("Map not ready for export"));return;}
-    window.leafletImage(map,(err,canvas)=>{
-      if(err){reject(err);return;}
-      resolve(canvas);
+function csvEscape(v){
+  const s=String(v??"");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+}
+
+function AttributeTable({layers,layerId,onLayerChange,onZoomToFeature,onBulkEdit,onDeleteFeatures,onClose,height,onHeightChange}){
+  const layer=useMemo(()=>layers.find(l=>String(l.id)===String(layerId))||layers[0],[layers,layerId]);
+  const features=layer?.geojson?.features||[];
+  const fields=useMemo(()=>Object.keys(features[0]?.properties||{}),[features]);
+
+  const [search,setSearch]=useState("");
+  const [sortField,setSortField]=useState(null);
+  const [sortDir,setSortDir]=useState("asc");
+  const [selected,setSelected]=useState(()=>new Set());
+  const [page,setPage]=useState(0);
+  const [bulkOpen,setBulkOpen]=useState(false);
+  const [bulkField,setBulkField]=useState("");
+  const [bulkValue,setBulkValue]=useState("");
+  const resizeRef=useRef(null);
+
+  // Reset transient UI state whenever the active layer changes
+  useEffect(()=>{
+    setSelected(new Set());setPage(0);setSearch("");setSortField(null);setBulkOpen(false);
+  },[layerId]);
+
+  // Attach a stable original-index to each feature so sorting/filtering
+  // never lose track of which row in the underlying layer.geojson.features
+  // array a row corresponds to.
+  const indexed=useMemo(()=>features.map((f,i)=>({f,i})),[features]);
+
+  const filtered=useMemo(()=>{
+    if(!search.trim()) return indexed;
+    const q=search.toLowerCase();
+    return indexed.filter(({f})=>Object.values(f.properties||{}).some(v=>String(v??"").toLowerCase().includes(q)));
+  },[indexed,search]);
+
+  const sorted=useMemo(()=>{
+    if(!sortField) return filtered;
+    const arr=[...filtered];
+    arr.sort((a,b)=>{
+      const av=a.f.properties?.[sortField], bv=b.f.properties?.[sortField];
+      const an=parseFloat(av), bn=parseFloat(bv);
+      const bothNumeric=av!==""&&bv!==""&&av!=null&&bv!=null&&!isNaN(an)&&!isNaN(bn);
+      const cmp=bothNumeric?(an-bn):String(av??"").localeCompare(String(bv??""));
+      return sortDir==="asc"?cmp:-cmp;
     });
-  });
+    return arr;
+  },[filtered,sortField,sortDir]);
 
-  const doExport=async mode=>{
-    onClose();
-    await new Promise(r=>setTimeout(r,350));
-    setExporting(true);
-    try{
-      if(mode==="map"){
-        const mapCanvas=await captureMap();
-        const a=document.createElement("a");
-        a.href=mapCanvas.toDataURL("image/png");
-        a.download=`${projectTitle||"geocore"}_map.png`;
-        a.click();
-        return;
-      }
+  const totalPages=Math.max(1,Math.ceil(sorted.length/ATTR_PAGE_SIZE));
+  const clampedPage=Math.min(page,totalPages-1);
+  const pageRows=sorted.slice(clampedPage*ATTR_PAGE_SIZE,(clampedPage+1)*ATTR_PAGE_SIZE);
 
-      // dashboard / pdf: capture the map separately (tiles render correctly),
-      // hide the live map div so html2canvas leaves a clean gap behind it,
-      // then composite the map image into that gap.
-      const target=dashboardRef.current||editorRef.current;
-      const mapDiv=mapDivRef?.current;
-      let mapCanvas=null,mapRect=null,targetRect=null;
-      try{mapCanvas=await captureMap();}catch{/* map may not be present in this view */}
-
-      if(mapDiv&&mapCanvas){
-        mapRect=mapDiv.getBoundingClientRect();
-        targetRect=target.getBoundingClientRect();
-      }
-
-      const prevVisibility=mapDiv?.style.visibility;
-      if(mapDiv) mapDiv.style.visibility="hidden";
-
-      let canvas;
-      try{
-        canvas=await window.html2canvas(target,{useCORS:true,allowTaint:true,scale:2,logging:false,
-          ignoreElements:el=>el.classList?.contains('leaflet-control-zoom')});
-      }finally{
-        if(mapDiv) mapDiv.style.visibility=prevVisibility||"";
-      }
-
-      // Composite the map screenshot into the gap left where mapDiv was.
-      if(mapCanvas&&mapRect&&targetRect){
-        const ctx=canvas.getContext("2d");
-        const scaleX=canvas.width/targetRect.width;
-        const scaleY=canvas.height/targetRect.height;
-        const dx=(mapRect.left-targetRect.left)*scaleX;
-        const dy=(mapRect.top-targetRect.top)*scaleY;
-        const dw=mapRect.width*scaleX;
-        const dh=mapRect.height*scaleY;
-        ctx.drawImage(mapCanvas,0,0,mapCanvas.width,mapCanvas.height,dx,dy,dw,dh);
-      }
-
-      if(mode==="pdf"){
-        const pdf=new window.jspdf.jsPDF({orientation:"landscape",unit:"px",format:[canvas.width/2,canvas.height/2]});
-        pdf.addImage(canvas.toDataURL("image/png"),"PNG",0,0,canvas.width/2,canvas.height/2);
-        pdf.save(`${projectTitle||"geocore"}.pdf`);
-      } else {
-        const a=document.createElement("a");
-        a.href=canvas.toDataURL("image/png");
-        a.download=`${projectTitle||"geocore"}_${mode}.png`;
-        a.click();
-      }
-    }catch(err){alert("Export failed: "+err.message);}
-    finally{setExporting(false);}
+  const toggleSort=f=>{
+    if(sortField===f) setSortDir(d=>d==="asc"?"desc":"asc");
+    else{setSortField(f);setSortDir("asc");}
   };
 
-  const opts=[
-    {key:"map",   icon:"map",    label:"Map only",       desc:"High-resolution PNG of the map"},
-    {key:"dashboard",icon:"chart",label:"Full dashboard", desc:"Entire dashboard as PNG"},
-    {key:"pdf",   icon:"export", label:"PDF document",   desc:"Full dashboard as landscape PDF"},
-  ];
+  const toggleRow=i=>setSelected(p=>{const n=new Set(p);n.has(i)?n.delete(i):n.add(i);return n;});
+  const pageAllSelected=pageRows.length>0&&pageRows.every(r=>selected.has(r.i));
+  const togglePageAll=()=>setSelected(p=>{
+    const n=new Set(p);
+    if(pageAllSelected) pageRows.forEach(r=>n.delete(r.i));
+    else pageRows.forEach(r=>n.add(r.i));
+    return n;
+  });
+  const selectAllFiltered=()=>setSelected(new Set(sorted.map(r=>r.i)));
+  const clearSelection=()=>setSelected(new Set());
+
+  const applyBulkEdit=()=>{
+    if(!bulkField||selected.size===0) return;
+    onBulkEdit(String(layer.id),selected,bulkField,bulkValue);
+    setBulkOpen(false);setBulkValue("");
+  };
+
+  const deleteSelected=()=>{
+    if(!selected.size) return;
+    if(!window.confirm(`Delete ${selected.size} selected feature${selected.size>1?"s":""}? This cannot be undone.`)) return;
+    onDeleteFeatures(String(layer.id),selected);
+    clearSelection();
+  };
+
+  const exportCSV=()=>{
+    if(!fields.length) return;
+    const rows=sorted.map(({f})=>fields.map(fld=>csvEscape(f.properties?.[fld])).join(","));
+    const csv=[fields.map(csvEscape).join(","),...rows].join("\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=`${(layer?.name||"layer").replace(/[^a-z0-9_-]+/gi,"_")}.csv`;
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  };
+
+  // Drag-to-resize the drawer height
+  const startResize=e=>{
+    e.preventDefault();
+    const startY=e.clientY, startH=height;
+    const move=ev=>onHeightChange(Math.min(Math.max(startH-(ev.clientY-startY),160),window.innerHeight*0.8));
+    const up=()=>{window.removeEventListener("mousemove",move);window.removeEventListener("mouseup",up);};
+    window.addEventListener("mousemove",move);window.addEventListener("mouseup",up);
+  };
+
+  const inp=extra=>({background:"var(--panel2)",border:"1.5px solid var(--border)",
+    borderRadius:8,padding:"6px 10px",fontSize:12,color:"var(--text)",
+    fontFamily:"Inter,DM Sans,sans-serif",outline:"none",...extra});
 
   return(
-    <Modal title="Export" onClose={onClose} width={360}>
-      <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:10}}>
-        {opts.map(opt=>(
-          <button key={opt.key} onClick={()=>doExport(opt.key)} disabled={exporting}
-            style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",
-              background:"var(--panel2)",border:"1.5px solid var(--border)",
-              borderRadius:12,cursor:exporting?"not-allowed":"pointer",
-              textAlign:"left",width:"100%",transition:"all 0.15s"}}
-            onMouseEnter={e=>{if(!exporting){e.currentTarget.style.borderColor="var(--accent)";e.currentTarget.style.background="var(--accent-soft)";}}}
-            onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.background="var(--panel2)";}}>
-            <div style={{width:40,height:40,borderRadius:10,background:"var(--panel3)",
-              display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <Icon name={opt.icon} size={20} color="var(--accent)"/>
-            </div>
-            <div>
-              <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:3,fontFamily:"Inter,DM Sans,sans-serif"}}>{opt.label}</div>
-              <div style={{fontSize:11,color:"var(--text-muted)",fontFamily:"Inter,DM Sans,sans-serif"}}>{opt.desc}</div>
-            </div>
+    <div style={{height,flexShrink:0,display:"flex",flexDirection:"column",
+      background:"var(--panel)",borderTop:"1.5px solid var(--border)",
+      boxShadow:"0 -6px 24px var(--shadow)",position:"relative",zIndex:80}}>
+      {/* Drag handle */}
+      <div onMouseDown={startResize} title="Drag to resize"
+        style={{position:"absolute",top:-4,left:0,right:0,height:8,cursor:"ns-resize",zIndex:2}}/>
+
+      {/* Header bar */}
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",
+        borderBottom:"1px solid var(--border)",flexShrink:0,flexWrap:"wrap"}}>
+        <Icon name="table" size={14} color="var(--accent)"/>
+        <span style={{fontSize:12,fontWeight:700,color:"var(--text)",whiteSpace:"nowrap"}}>Attribute Table</span>
+
+        <select value={String(layer?.id||"")} onChange={e=>onLayerChange(e.target.value)}
+          style={{...inp(),minWidth:120}}>
+          {layers.filter(l=>l.type!=="tile").map(l=><option key={l.id} value={String(l.id)}>{l.name}</option>)}
+        </select>
+
+        <div style={{display:"flex",alignItems:"center",gap:6,background:"var(--panel2)",
+          border:"1.5px solid var(--border)",borderRadius:8,padding:"4px 10px",minWidth:180}}>
+          <Icon name="search" size={12} color="var(--text-muted)"/>
+          <input value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}}
+            placeholder="Search all fields…"
+            style={{flex:1,background:"transparent",border:"none",outline:"none",
+              color:"var(--text)",fontSize:12,fontFamily:"Inter,DM Sans,sans-serif"}}/>
+          {search&&<button onClick={()=>setSearch("")}
+            style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",padding:0}}>
+            <Icon name="x" size={11}/>
+          </button>}
+        </div>
+
+        <span style={{fontSize:11,color:"var(--text-muted)",whiteSpace:"nowrap"}}>
+          {sorted.length.toLocaleString()} of {features.length.toLocaleString()} rows
+          {selected.size>0&&<strong style={{color:"var(--accent)"}}> · {selected.size} selected</strong>}
+        </span>
+
+        <div style={{marginLeft:"auto",display:"flex",gap:6,alignItems:"center"}}>
+          {selected.size>0&&(
+            <>
+              <button onClick={()=>setBulkOpen(p=>!p)}
+                style={{...ss(),fontSize:11,fontWeight:600,padding:"5px 10px",
+                  background:bulkOpen?"var(--accent)":"var(--panel2)",
+                  color:bulkOpen?"#fff":"var(--text-muted)",
+                  border:`1.5px solid ${bulkOpen?"var(--accent)":"var(--border)"}`}}>
+                <Icon name="edit2" size={11} color={bulkOpen?"#fff":"var(--text-muted)"}/> Edit Field
+              </button>
+              <button onClick={deleteSelected}
+                style={{...ss(),fontSize:11,fontWeight:600,padding:"5px 10px",color:"var(--danger)"}}>
+                <Icon name="trash" size={11} color="var(--danger)"/> Delete
+              </button>
+              <button onClick={clearSelection}
+                style={{...ss(),fontSize:11,padding:"5px 10px"}}>
+                Clear
+              </button>
+            </>
+          )}
+          <button onClick={exportCSV} title="Export visible rows as CSV"
+            style={{...ss(),fontSize:11,fontWeight:600,padding:"5px 10px"}}>
+            <Icon name="csv" size={12}/> CSV
           </button>
-        ))}
+          <button onClick={onClose}
+            style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",padding:4}}>
+            <Icon name="x" size={16}/>
+          </button>
+        </div>
       </div>
-      <div style={{padding:"10px 18px",borderTop:"1px solid var(--border)",fontSize:11,
-        color:"var(--text-muted)",textAlign:"center",fontFamily:"Inter,DM Sans,sans-serif"}}>
-        Modal closes before capture — exports are clean
+
+      {/* Bulk edit row */}
+      {bulkOpen&&(
+        <div style={{display:"flex",gap:8,alignItems:"center",padding:"8px 12px",
+          borderBottom:"1px solid var(--border)",background:"var(--accent-soft)",flexShrink:0,flexWrap:"wrap"}}>
+          <span style={{fontSize:11,color:"var(--text)",fontWeight:600}}>
+            Set field for {selected.size} row{selected.size>1?"s":""}:
+          </span>
+          <select value={bulkField} onChange={e=>setBulkField(e.target.value)} style={{...inp(),minWidth:120}}>
+            <option value="">— field —</option>
+            {fields.map(f=><option key={f} value={f}>{f}</option>)}
+          </select>
+          <input value={bulkValue} onChange={e=>setBulkValue(e.target.value)}
+            placeholder="new value" style={{...inp(),flex:1,minWidth:120}}/>
+          <button onClick={applyBulkEdit} disabled={!bulkField}
+            style={{padding:"6px 16px",borderRadius:8,border:"none",
+              background:bulkField?"var(--accent)":"var(--border)",
+              color:bulkField?"#fff":"var(--text-muted)",
+              cursor:bulkField?"pointer":"not-allowed",fontSize:11,fontWeight:700,fontFamily:"inherit"}}>
+            Apply
+          </button>
+        </div>
+      )}
+
+      {/* Grid */}
+      <div style={{flex:1,overflow:"auto"}}>
+        {!layer||fields.length===0?(
+          <EmptyMsg>No features on this layer yet</EmptyMsg>
+        ):(
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead>
+              <tr style={{position:"sticky",top:0,background:"var(--panel2)",zIndex:1}}>
+                <th style={{padding:"7px 10px",width:34,borderBottom:"1.5px solid var(--border)",
+                  borderRight:"1px solid var(--border)"}}>
+                  <input type="checkbox" checked={pageAllSelected} onChange={togglePageAll}
+                    style={{cursor:"pointer"}}/>
+                </th>
+                <th style={{padding:"7px 10px",width:44,textAlign:"right",color:"var(--text-muted)",
+                  fontSize:10,fontWeight:700,borderBottom:"1.5px solid var(--border)",
+                  borderRight:"1px solid var(--border)"}}>#</th>
+                <th style={{padding:"7px 10px",width:36,borderBottom:"1.5px solid var(--border)",
+                  borderRight:"1px solid var(--border)"}}/>
+                {fields.map(f=>(
+                  <th key={f} onClick={()=>toggleSort(f)}
+                    style={{padding:"7px 10px",textAlign:"left",color:"var(--text)",fontWeight:700,
+                      fontSize:10,letterSpacing:"0.04em",textTransform:"uppercase",cursor:"pointer",
+                      borderBottom:"1.5px solid var(--border)",borderRight:"1px solid var(--border)",
+                      whiteSpace:"nowrap",userSelect:"none"}}>
+                    <span style={{display:"flex",alignItems:"center",gap:4}}>
+                      {f}
+                      {sortField===f&&<Icon name={sortDir==="asc"?"arrowUp":"arrowDown"} size={10} color="var(--accent)"/>}
+                    </span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {pageRows.map(({f,i})=>{
+                const isSel=selected.has(i);
+                return(
+                  <tr key={i}
+                    style={{background:isSel?"var(--accent-soft)":"transparent",cursor:"pointer"}}
+                    onMouseEnter={e=>{if(!isSel)e.currentTarget.style.background="var(--hover)";}}
+                    onMouseLeave={e=>{if(!isSel)e.currentTarget.style.background="transparent";}}>
+                    <td style={{padding:"5px 10px",borderBottom:"1px solid var(--border)",
+                      borderRight:"1px solid var(--border)"}} onClick={e=>e.stopPropagation()}>
+                      <input type="checkbox" checked={isSel} onChange={()=>toggleRow(i)} style={{cursor:"pointer"}}/>
+                    </td>
+                    <td style={{padding:"5px 10px",textAlign:"right",color:"var(--text-muted)",
+                      fontFamily:"monospace",fontSize:10,borderBottom:"1px solid var(--border)",
+                      borderRight:"1px solid var(--border)"}}>{i+1}</td>
+                    <td style={{padding:"5px 8px",borderBottom:"1px solid var(--border)",
+                      borderRight:"1px solid var(--border)",textAlign:"center"}}
+                      onClick={()=>onZoomToFeature(f)} title="Zoom to feature">
+                      <Icon name="target" size={13} color="var(--accent)"/>
+                    </td>
+                    {fields.map(fld=>(
+                      <td key={fld} onClick={()=>onZoomToFeature(f)}
+                        style={{padding:"5px 10px",color:"var(--text)",whiteSpace:"nowrap",
+                          overflow:"hidden",textOverflow:"ellipsis",maxWidth:220,
+                          borderBottom:"1px solid var(--border)",borderRight:"1px solid var(--border)",
+                          fontFamily:"Inter,DM Sans,sans-serif"}}>
+                        {String(f.properties?.[fld]??"")}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
+
+      {/* Footer / pagination */}
+      {totalPages>1&&(
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,
+          padding:"6px 12px",borderTop:"1px solid var(--border)",flexShrink:0}}>
+          <button onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={clampedPage===0}
+            style={{...ss({padding:"4px 10px",fontSize:11}),opacity:clampedPage===0?0.4:1}}>
+            <Icon name="chevL" size={11}/>
+          </button>
+          <span style={{fontSize:11,color:"var(--text-muted)",fontFamily:"monospace"}}>
+            Page {clampedPage+1} / {totalPages}
+          </span>
+          <button onClick={()=>setPage(p=>Math.min(totalPages-1,p+1))} disabled={clampedPage>=totalPages-1}
+            style={{...ss({padding:"4px 10px",fontSize:11}),opacity:clampedPage>=totalPages-1?0.4:1}}>
+            <Icon name="chevR" size={11}/>
+          </button>
+          {sorted.length>ATTR_PAGE_SIZE&&(
+            <button onClick={selectAllFiltered}
+              style={{...ss({padding:"4px 10px",fontSize:11})}}>
+              Select all {sorted.length.toLocaleString()} matching rows
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   CAPTURE MODAL — hands off to the OS's own
+   native screenshot tool via the clipboard,
+   instead of reconstructing pixels in canvas.
+═══════════════════════════════════════════ */
+function CaptureModal({projectTitle,onClose}){
+  const [phase,setPhase]=useState("instructions"); // instructions | preview
+  const [imgUrl,setImgUrl]=useState(null);
+  const [imgSize,setImgSize]=useState({w:0,h:0});
+  const [busy,setBusy]=useState(false);
+  const [err,setErr]=useState("");
+
+  const isMac=/Mac|iPhone|iPad|iPod/.test(navigator.platform||navigator.userAgent||"");
+  const isSafari=/^((?!chrome|crios|android).)*safari/i.test(navigator.userAgent||"");
+
+  const acceptBlob=useCallback(blob=>{
+    if(!blob) return;
+    const url=URL.createObjectURL(blob);
+    const img=new Image();
+    img.onload=()=>{
+      setImgUrl(prev=>{if(prev) URL.revokeObjectURL(prev); return url;});
+      setImgSize({w:img.naturalWidth,h:img.naturalHeight});
+      setPhase("preview"); setErr("");
+    };
+    img.src=url;
+  },[]);
+
+  useEffect(()=>{
+    const onPaste=e=>{
+      const item=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith("image/"));
+      if(item) acceptBlob(item.getAsFile());
+    };
+    window.addEventListener("paste",onPaste);
+    return ()=>window.removeEventListener("paste",onPaste);
+  },[acceptBlob]);
+
+  useEffect(()=>()=>{if(imgUrl) URL.revokeObjectURL(imgUrl);},[imgUrl]);
+
+  const [dragOver,setDragOver]=useState(false);
+  const onDrop=e=>{
+    e.preventDefault(); setDragOver(false);
+    const file=[...(e.dataTransfer?.files||[])].find(f=>f.type.startsWith("image/"));
+    if(file) acceptBlob(file);
+    else setErr("That doesn't look like an image file — drop a screenshot (PNG/JPG).");
+  };
+
+  const grabFromClipboard=async()=>{
+    setBusy(true); setErr("");
+    try{
+      if(!navigator.clipboard?.read){
+        setErr("This browser can't read the clipboard on click — just press Ctrl/Cmd+V on your keyboard instead, right here.");
+        return;
+      }
+      const items=await navigator.clipboard.read();
+      let found=null;
+      for(const item of items){
+        const type=item.types.find(t=>t.startsWith("image/"));
+        if(type){found=await item.getType(type);break;}
+      }
+      if(!found){setErr("No screenshot found on your clipboard yet. Take it first, then click this again.");return;}
+      acceptBlob(found);
+    }catch(e){setErr(e.message||"Couldn't read the clipboard — try Ctrl/Cmd+V instead.");}
+    finally{setBusy(false);}
+  };
+
+  const download=()=>{
+    const a=document.createElement("a");
+    a.href=imgUrl;
+    a.download=`${projectTitle||"geocore"}_capture.png`;
+    a.click();
+  };
+
+  const saveAsPdf=()=>{
+    if(!window.jspdf||!imgUrl) return;
+    const img=new Image();
+    img.onload=()=>{
+      const pdf=new window.jspdf.jsPDF({orientation:img.width>=img.height?"landscape":"portrait",unit:"px",format:[img.width/2,img.height/2]});
+      pdf.addImage(imgUrl,"PNG",0,0,img.width/2,img.height/2);
+      pdf.save(`${projectTitle||"geocore"}_capture.pdf`);
+    };
+    img.src=imgUrl;
+  };
+
+  const retake=()=>{
+    if(imgUrl) URL.revokeObjectURL(imgUrl);
+    setImgUrl(null); setPhase("instructions"); setErr("");
+  };
+
+  return(
+    <Modal title="Capture" subtitle="Uses your laptop's own native screenshot tool" onClose={onClose} width={400}>
+      {phase==="instructions"&&(
+        <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:14}}
+          onDragOver={e=>{e.preventDefault();setDragOver(true);}}
+          onDragLeave={()=>setDragOver(false)}
+          onDrop={onDrop}>
+          <div style={{fontSize:13,color:"var(--text)",lineHeight:1.7}}>
+            Arrange the view the way you want it, then use your laptop's own screenshot tool:
+          </div>
+
+          {isMac?(
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{background:"var(--panel2)",border:"1.5px solid var(--border)",borderRadius:10,padding:"10px 14px"}}>
+                <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:4}}>Recommended — copies straight to clipboard</div>
+                <div style={{fontSize:13,color:"var(--text)"}}>
+                  Press <strong style={{color:"var(--accent)"}}>⌘ + Control + Shift + 4</strong>, drag over the area.
+                </div>
+              </div>
+              <div style={{background:"var(--panel2)",border:"1.5px solid var(--border)",borderRadius:10,padding:"10px 14px"}}>
+                <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:4}}>Alternative — saves a file to your Desktop</div>
+                <div style={{fontSize:13,color:"var(--text)"}}>
+                  Press <strong style={{color:"var(--accent)"}}>⌘ + Shift + 4</strong> (no Control) or <strong style={{color:"var(--accent)"}}>⌘ + Shift + 5</strong> for the on-screen toolbar. Then drag that file into this window (below).
+                </div>
+              </div>
+            </div>
+          ):(
+            <div style={{background:"var(--panel2)",border:"1.5px solid var(--border)",borderRadius:10,padding:"10px 14px"}}>
+              <div style={{fontSize:13,color:"var(--text)"}}>
+                Press <strong style={{color:"var(--accent)"}}>Win + Shift + S</strong> and drag over the area.
+              </div>
+              <div style={{fontSize:12,color:"var(--text-muted)",marginTop:4}}>Snip &amp; Sketch copies your selection straight to the clipboard automatically.</div>
+            </div>
+          )}
+
+          <div style={{fontSize:13,color:"var(--text)",lineHeight:1.7}}>
+            Then come back here and press <strong style={{color:"var(--accent)"}}>Ctrl/Cmd+V</strong>
+            {!isSafari&&<> — or click the button below</>}.
+          </div>
+
+          {isSafari&&(
+            <div style={{fontSize:11,color:"var(--text-muted)",background:"var(--accent-soft)",borderRadius:8,padding:"8px 12px"}}>
+              Safari can't grab the clipboard with a click — Ctrl/Cmd+V (or dragging in a saved file below) is the reliable way here.
+            </div>
+          )}
+
+          {err&&<div style={{fontSize:12,color:"var(--danger)"}}>{err}</div>}
+
+          {!isSafari&&(
+            <button onClick={grabFromClipboard} disabled={busy}
+              style={{padding:"12px 16px",borderRadius:10,border:"none",background:"var(--accent)",
+                color:"#fff",fontWeight:700,fontSize:13,cursor:busy?"not-allowed":"pointer",fontFamily:"inherit"}}>
+              {busy?"Checking clipboard…":"I've taken the screenshot — Insert it"}
+            </button>
+          )}
+
+          <div style={{border:`1.5px dashed ${dragOver?"var(--accent)":"var(--border)"}`,borderRadius:10,
+            padding:"18px 14px",textAlign:"center",fontSize:12,
+            color:dragOver?"var(--accent)":"var(--text-muted)",
+            background:dragOver?"var(--accent-soft)":"transparent",transition:"all 0.12s"}}>
+            …or drag a saved screenshot file in here
+          </div>
+        </div>
+      )}
+      {phase==="preview"&&(
+        <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
+          <img src={imgUrl} alt="Captured screenshot" style={{width:"100%",borderRadius:10,border:"1.5px solid var(--border)",display:"block"}}/>
+          <div style={{fontSize:11,color:"var(--text-muted)"}}>{imgSize.w}×{imgSize.h}px</div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={download}
+              style={{flex:1,padding:"11px",borderRadius:10,border:"1.5px solid var(--border)",
+                background:"var(--panel2)",color:"var(--text)",fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>
+              Download PNG
+            </button>
+            <button onClick={saveAsPdf}
+              style={{flex:1,padding:"11px",borderRadius:10,border:"1.5px solid var(--border)",
+                background:"var(--panel2)",color:"var(--text)",fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>
+              Save as PDF
+            </button>
+          </div>
+          <button onClick={retake}
+            style={{background:"none",border:"none",color:"var(--text-muted)",fontSize:12,
+              cursor:"pointer",textDecoration:"underline",fontFamily:"inherit"}}>
+            Retake
+          </button>
+        </div>
+      )}
     </Modal>
   );
 }
@@ -2145,6 +2511,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
   const mapRef=useRef(null),mapDivRef=useRef(null),tileRef=useRef(null);
   const geoLayerRef=useRef(null),labelLayerRef=useRef(null),measureRef=useRef(null);
   const tileLayersRef=useRef({}); // id→L.tileLayer for custom tile layers
+  const highlightRef=useRef(null),highlightTimerRef=useRef(null);
   const boundsTimer=useRef(null),saveTimer=useRef(null),dashRef=useRef(null);
   const editorBodyRef=useRef(null);
 
@@ -2217,6 +2584,11 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
   const [viewMode,setViewMode]=useState("editor"); // "editor" | "dashboard"
   const [layoutPickerOpen,setLayoutPickerOpen]=useState(false);
   const [chartsHidden,setChartsHidden]=useState(false);
+
+  // Attribute table
+  const [tableOpen,setTableOpen]=useState(false);
+  const [tableLayerId,setTableLayerId]=useState(null);
+  const [tableHeight,setTableHeight]=useState(340);
 
   // Map
   const [basemap,setBasemap]=useState(initProject.basemap||"Satellite");
@@ -2326,14 +2698,14 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
     return()=>{if(mapRef.current){mapRef.current.remove();mapRef.current=null;}};
   },[]);
 
-  /* Invalidate map size whenever layout changes (view toggle, sidebar hide, layout switch) */
+  /* Invalidate map size whenever layout changes (view toggle, sidebar hide, layout switch, table drawer) */
   useEffect(()=>{
     if(!mapRef.current) return;
     // Double rAF ensures the DOM has fully reflowed
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
       mapRef.current?.invalidateSize({animate:false});
     }));
-  },[viewMode,chartsHidden,layoutKey]);
+  },[viewMode,chartsHidden,layoutKey,tableOpen,tableHeight]);
 
   /* Basemap */
   useEffect(()=>{
@@ -2561,6 +2933,54 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
     try{const b=window.L.geoJSON(activeLayer.geojson).getBounds();if(b.isValid())mapRef.current.fitBounds(b,{padding:[40,40]});}catch{}
   },[activeLayer?.id]);
 
+  /* ─── Attribute table support: zoom-to-feature + bulk edit + delete ─── */
+
+  // Default the table's active layer to whichever layer is currently primary
+  useEffect(()=>{
+    if(tableOpen&&!tableLayerId&&layers.length) setTableLayerId(String(primaryLayerId||layers[0].id));
+  },[tableOpen,tableLayerId,primaryLayerId,layers]);
+
+  const zoomToFeature=useCallback(feature=>{
+    if(!mapRef.current||!feature?.geometry) return;
+    const L=window.L,map=mapRef.current;
+    try{
+      const gj=L.geoJSON(feature);
+      const b=gj.getBounds();
+      if(!b.isValid()) return;
+      if(feature.geometry.type==="Point"){
+        const c=feature.geometry.coordinates;
+        map.setView([c[1],c[0]],Math.max(map.getZoom(),16),{animate:true});
+      } else {
+        map.fitBounds(b,{padding:[70,70],maxZoom:17,animate:true});
+      }
+      // Temporary highlight outline that fades after a couple seconds
+      if(highlightRef.current){highlightRef.current.remove();highlightRef.current=null;}
+      clearTimeout(highlightTimerRef.current);
+      highlightRef.current=L.geoJSON(feature,{
+        style:{color:"#C8922A",weight:4,fillColor:"#C8922A",fillOpacity:0.25,dashArray:"6 4"},
+        pointToLayer:(f,latlng)=>L.circleMarker(latlng,{radius:14,color:"#C8922A",weight:4,fillColor:"#C8922A",fillOpacity:0.25}),
+      }).addTo(map);
+      highlightTimerRef.current=setTimeout(()=>{highlightRef.current?.remove();highlightRef.current=null;},2200);
+    }catch{}
+  },[]);
+
+  const bulkEditFeatures=useCallback((lid,indices,field,value)=>{
+    setLayers(prev=>prev.map(l=>{
+      if(String(l.id)!==String(lid)) return l;
+      const feats=l.geojson.features.map((f,i)=>indices.has(i)
+        ?{...f,properties:{...f.properties,[field]:value}}:f);
+      return {...l,geojson:{...l.geojson,features:feats}};
+    }));
+  },[]);
+
+  const deleteFeatures=useCallback((lid,indices)=>{
+    setLayers(prev=>prev.map(l=>{
+      if(String(l.id)!==String(lid)) return l;
+      const feats=l.geojson.features.filter((f,i)=>!indices.has(i));
+      return {...l,geojson:{...l.geojson,features:feats}};
+    }));
+  },[]);
+
   /* File upload */
   const processFile=async file=>{
     const ext=file.name.split(".").pop().toLowerCase();
@@ -2766,8 +3186,12 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
               {LAYOUT_TEMPLATES[layoutKey]?.label||"Layout"}
             </Btn>
           )}
-          <Btn onClick={()=>setExportOpen(true)}>
-            <Icon name="export" size={13} color="var(--text-muted)"/> Export
+          <Btn onClick={()=>setTableOpen(p=>!p)} active={tableOpen} disabled={!layers.length}
+            title="Attribute table">
+            <Icon name="table" size={13} color={tableOpen?"#fff":"var(--text-muted)"}/> Table
+          </Btn>
+          <Btn onClick={()=>setExportOpen(true)} title="Capture a screenshot using your laptop's native tool">
+            <Icon name="export" size={13} color="var(--text-muted)"/> Capture
           </Btn>
           <Btn onClick={()=>setAnalysisOpen(true)} title="Spatial analysis tools">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -2803,7 +3227,8 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
         style={{position:"absolute",zIndex:10,background:"transparent"}}/>
 
       {/* BODY */}
-      <div ref={editorBodyRef} style={{display:"flex",flex:1,overflow:"hidden",position:"relative"}}>
+      <div style={{display:"flex",flex:1,flexDirection:"column",overflow:"hidden",minHeight:0}}>
+      <div ref={editorBodyRef} style={{display:"flex",flex:1,overflow:"hidden",position:"relative",minHeight:0}}>
         {viewMode==="dashboard"?(
           /* ═══ DASHBOARD LAYOUT VIEW ═══ */
           <div ref={dashRef} style={{flex:1,overflow:"hidden"}}>
@@ -3127,6 +3552,25 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
         )}
       </div>
 
+      {/* ATTRIBUTE TABLE DRAWER — spans full width, below the editor/dashboard body */}
+      {tableOpen&&layers.length>0&&(
+        <AttributeTable
+          layers={layers}
+          layerId={tableLayerId}
+          onLayerChange={setTableLayerId}
+          onZoomToFeature={feature=>{
+            if(viewMode!=="editor") setViewMode("editor");
+            zoomToFeature(feature);
+          }}
+          onBulkEdit={bulkEditFeatures}
+          onDeleteFeatures={deleteFeatures}
+          onClose={()=>setTableOpen(false)}
+          height={tableHeight}
+          onHeightChange={setTableHeight}
+        />
+      )}
+      </div>
+
       {/* MODALS */}
       {symbolEditorOpen&&(
         <SymbolEditor
@@ -3160,11 +3604,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
         />
       )}
       {exportOpen&&(
-        <ExportModal
-          dashboardRef={dashRef}
-          mapDivRef={mapDivRef}
-          mapRef={mapRef}
-          editorRef={editorBodyRef}
+        <CaptureModal
           projectTitle={projectTitle}
           onClose={()=>setExportOpen(false)}
         />
@@ -3226,7 +3666,8 @@ export default function App(){
       loadScript(CDN.chartjs),loadScript(CDN.shpjs),
       loadScript(CDN.html2canvas),loadScript(CDN.jspdf),
       loadScript(CDN.togeojson),loadScript(CDN.jszip),loadScript(CDN.turf),
-    ]).then(()=>{setReady(true);return loadScript(CDN.leaflet_image);}).catch(console.error);
+      loadScript(CDN.leaflet_image),
+    ]).then(()=>setReady(true)).catch(console.error);
   },[]);
 
   const toggleTheme=()=>setTheme(t=>t==="dark"?"light":"dark");

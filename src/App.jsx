@@ -55,7 +55,7 @@ const BASEMAPS = {
   "Light":       "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
 };
 const RWANDA = { center:[-1.9403,29.8739], zoom:9 };
-const DB_NAME = "geocore_v7";
+const DB_NAME = "geohub_v7";
 
 /* Dashboard layout templates */
 const LAYOUT_TEMPLATES = {
@@ -1608,7 +1608,7 @@ function CaptureModal({projectTitle,onClose}){
   const download=()=>{
     const a=document.createElement("a");
     a.href=imgUrl;
-    a.download=`${projectTitle||"geocore"}_capture.png`;
+    a.download=`${projectTitle||"geohub"}_capture.png`;
     a.click();
   };
 
@@ -1618,7 +1618,7 @@ function CaptureModal({projectTitle,onClose}){
     img.onload=()=>{
       const pdf=new window.jspdf.jsPDF({orientation:img.width>=img.height?"landscape":"portrait",unit:"px",format:[img.width/2,img.height/2]});
       pdf.addImage(imgUrl,"PNG",0,0,img.width/2,img.height/2);
-      pdf.save(`${projectTitle||"geocore"}_capture.pdf`);
+      pdf.save(`${projectTitle||"geohub"}_capture.pdf`);
     };
     img.src=imgUrl;
   };
@@ -1873,7 +1873,7 @@ function MapSlot({mapProps,isDark,gridArea,style={}}){
     if(!slot||!mapDiv) return;
 
     function reposition(){
-      const host=document.getElementById("geocore-app-root");
+      const host=document.getElementById("geohub-app-root");
       if(!host) return;
       const sr=slot.getBoundingClientRect();
       const hr=host.getBoundingClientRect();
@@ -2374,7 +2374,7 @@ function ProjectsPage({onOpen,theme,onThemeToggle}){
           </svg>
           <div>
             <div style={{fontSize:16,fontWeight:800,letterSpacing:"-0.01em",color:"var(--text)",lineHeight:1}}>
-              GeoCore <span style={{color:"var(--accent)"}}>Platform</span>
+              GeoHub <span style={{color:"var(--accent)"}}>Platform</span>
             </div>
             <div style={{fontSize:10,color:"var(--text-muted)",letterSpacing:"0.06em",marginTop:1}}>
               TRINITY METALS · SPATIAL INTELLIGENCE
@@ -2498,7 +2498,7 @@ function ProjectsPage({onOpen,theme,onThemeToggle}){
       </div>
       <div style={{borderTop:"1px solid var(--border)",padding:"18px 32px",textAlign:"center",
         fontSize:11,color:"var(--text-muted)",letterSpacing:"0.06em",fontFamily:"Inter,DM Sans,sans-serif"}}>
-        GeoCore v7 · Trinity Metals Spatial Intelligence · All data stored locally · No login required
+        GeoHub v7 · Trinity Metals Spatial Intelligence · All data stored locally · No login required
       </div>
     </div>
   );
@@ -2628,8 +2628,8 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
 
   /* Global CSS */
   useEffect(()=>{
-    if(document.getElementById("geocore-css")) return;
-    const el=document.createElement("style");el.id="geocore-css";
+    if(document.getElementById("geohub-css")) return;
+    const el=document.createElement("style");el.id="geohub-css";
     el.textContent=`
       *{box-sizing:border-box;margin:0;padding:0}
       body,html,#root{height:100%;width:100%;overflow:hidden}
@@ -3099,7 +3099,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
 
   /* ═══ RENDER ═══ */
   return(
-    <div id="geocore-app-root" data-maphost="true" style={{display:"flex",flexDirection:"column",height:"100vh",
+    <div id="geohub-app-root" data-maphost="true" style={{display:"flex",flexDirection:"column",height:"100vh",
       position:"relative",overflow:"hidden",
       background:"var(--bg)",fontFamily:"Inter,DM Sans,sans-serif",color:"var(--text)"}}>
 
@@ -3432,7 +3432,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
                 <span style={{fontSize:11,color:"var(--text-muted)"}}>
                   {totalVisible.toLocaleString()} visible / {totalFeatures.toLocaleString()} total
                 </span>
-                <span style={{fontSize:10,color:"var(--accent)",fontWeight:700,letterSpacing:"0.06em"}}>GEOCORE v7</span>
+                <span style={{fontSize:10,color:"var(--accent)",fontWeight:700,letterSpacing:"0.06em"}}>GeoHub v7</span>
               </div>
             </div>
             )}
@@ -3640,16 +3640,16 @@ export default function App(){
   const [ready,setReady]=useState(false);
   const [screen,setScreen]=useState("projects");
   const [project,setProject]=useState(null);
-  const [theme,setTheme]=useState(()=>localStorage.getItem("geocore_theme")||"dark");
+  const [theme,setTheme]=useState(()=>localStorage.getItem("geohub_theme")||"dark");
 
   useEffect(()=>{
     Object.entries(THEMES[theme]).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
-    localStorage.setItem("geocore_theme",theme);
+    localStorage.setItem("geohub_theme",theme);
   },[theme]);
 
   useEffect(()=>{
-    if(document.getElementById("geocore-root-css")) return;
-    const el=document.createElement("style");el.id="geocore-root-css";
+    if(document.getElementById("geohub-root-css")) return;
+    const el=document.createElement("style");el.id="geohub-root-css";
     el.textContent=`*{box-sizing:border-box;margin:0;padding:0}body,html,#root{height:100%;width:100%;font-family:Inter,'DM Sans',sans-serif}@keyframes spin{to{transform:rotate(360deg)}}@keyframes loadbar{0%{width:0%;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0%;margin-left:100%}}`;
     document.head.appendChild(el);
     if(!document.querySelector('link[href*="fonts.googleapis"]')){
@@ -3680,7 +3680,7 @@ export default function App(){
         <polygon points="18,10 26,25 10,25" fill="#C8922A" opacity="0.85"/>
       </svg>
       <div style={{color:"#C8922A",fontFamily:"Inter,sans-serif",fontSize:15,fontWeight:700,letterSpacing:"0.04em"}}>
-        Loading GeoCore…
+        Loading GeoHub…
       </div>
       <div style={{width:180,height:3,background:"#1c2a3d",borderRadius:3,overflow:"hidden"}}>
         <div style={{height:"100%",background:"#C8922A",borderRadius:3,animation:"loadbar 1.8s ease-in-out infinite"}}/>

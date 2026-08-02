@@ -2401,7 +2401,7 @@ function ProjectsPage({onOpen,theme,onThemeToggle}){
           </h1>
           <p style={{fontSize:14,lineHeight:1.8,maxWidth:540,
             color:isDark?"var(--text-muted)":"rgba(255,255,255,0.72)"}}>
-            Manage spatial data projects for all mine sites. Upload shapefiles, GeoJSON or CSV —
+            Manage spatial data projects for all mine sites. Upload shapefiles, GeoJSON or CSV,
             multi-layer dashboards, area analytics, and custom layout views.
           </p>
         </div>

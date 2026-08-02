@@ -190,7 +190,7 @@ full ownership of the codebase:
    confirm the app loads at `http://localhost:5173` before deploying anywhere.
 4. **Deploy** — run `npm run build` and upload the contents of `dist/` to your
    preferred static host (see Section 6.1 below).
-5. **Keep in sync** — if the original Ganza/LandTech repository receives updates,
+5. **Keep in sync** — if the original repository receives updates,
    you can pull them into your fork via GitHub's **Sync fork** button or by adding
    the upstream remote and merging manually.
 

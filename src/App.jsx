@@ -15,6 +15,7 @@ const CDN = {
   jszip:       "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js",
   turf:        "https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js",
   leaflet_image: "https://cdn.jsdelivr.net/npm/leaflet-image@0.4.0/leaflet-image.js",
+  vectorgrid: "https://unpkg.com/leaflet.vectorgrid@1.3.0/dist/Leaflet.VectorGrid.bundled.min.js",
 };
 
 /* ═══════════════════════════════════════════
@@ -22,18 +23,18 @@ const CDN = {
 ═══════════════════════════════════════════ */
 const THEMES = {
   dark: {
-    "--bg":"#0f1923","--panel":"#162030","--panel2":"#1c2a3d","--panel3":"#223247",
-    "--border":"#2a3d55","--text":"#e8e4d8","--text-muted":"#7a8fa8",
-    "--accent":"#C8922A","--accent2":"#a87420","--accent-soft":"rgba(200,146,42,0.12)",
-    "--hover":"rgba(200,146,42,0.08)","--danger":"#e05252","--success":"#4ecdc4",
-    "--shadow":"rgba(0,0,0,0.7)","--navy":"#1A2B4A",
+    "--bg":"#121816","--panel":"#19211e","--panel2":"#202a26","--panel3":"#2a3530",
+    "--border":"#3a4740","--text":"#f4f0e7","--text-muted":"#9da79e",
+    "--accent":"#ce7d35","--accent2":"#a9572d","--accent-soft":"rgba(206,125,53,0.14)",
+    "--hover":"rgba(206,125,53,0.10)","--danger":"#e0655b","--success":"#71b99a",
+    "--shadow":"rgba(5,10,8,0.55)","--navy":"#28332e",
   },
   light: {
-    "--bg":"#f0ede6","--panel":"#ffffff","--panel2":"#f7f5f0","--panel3":"#edeae3",
-    "--border":"#d8d3c8","--text":"#1A2B4A","--text-muted":"#5a6e85",
-    "--accent":"#C8922A","--accent2":"#a87420","--accent-soft":"rgba(200,146,42,0.10)",
-    "--hover":"rgba(200,146,42,0.07)","--danger":"#c0392b","--success":"#27ae60",
-    "--shadow":"rgba(26,43,74,0.15)","--navy":"#1A2B4A",
+    "--bg":"#efe9dc","--panel":"#fffaf0","--panel2":"#f7f0e4","--panel3":"#eadfce",
+    "--border":"#d8c9b3","--text":"#29322d","--text-muted":"#667269",
+    "--accent":"#b8662d","--accent2":"#914826","--accent-soft":"rgba(184,102,45,0.11)",
+    "--hover":"rgba(184,102,45,0.08)","--danger":"#c64b43","--success":"#43886e",
+    "--shadow":"rgba(54,44,28,0.14)","--navy":"#35433b",
   },
 };
 
@@ -41,11 +42,12 @@ const THEMES = {
    CONSTANTS
 ═══════════════════════════════════════════ */
 const CHART_PALETTE = [
-  "#C8922A","#1A2B4A","#2E86AB","#E84855","#3BB273","#7B2D8B","#F4A261",
-  "#264653","#E9C46A","#E76F51","#06D6A0","#118AB2","#FFB703","#8338EC",
-  "#FB5607","#3A86FF","#FFBE0B","#FF006E","#8AC926","#6A4C93",
+  "#C97334","#5E7D68","#B8453B","#C4A044","#7D5A86","#3D817B","#D38B5D",
+  "#6B6246","#D5B86D","#9E4939","#779A6A","#9A6B42","#8B3E61","#9C7F4F",
+  "#BD5E2D","#587E72","#B68A48","#B14455","#889B4D","#745775",
 ];
 const POINT_SHAPES = ["circle","square","triangle","diamond","star","cross","hexagon"];
+const FEATURE_AREA_CACHE = new WeakMap();
 const BASEMAPS = {
   "Satellite":   "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
   "Hybrid":      "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
@@ -56,6 +58,7 @@ const BASEMAPS = {
 };
 const RWANDA = { center:[-1.9403,29.8739], zoom:9 };
 const DB_NAME = "geohub_v7";
+const LARGE_VECTOR_THRESHOLD = 10000;
 
 /* Dashboard layout templates */
 const LAYOUT_TEMPLATES = {
@@ -121,6 +124,89 @@ function featureAreaM2(f) {
   if(t==="Polygon")      return ringAreaM2(c[0]);
   if(t==="MultiPolygon") return c.reduce((s,p)=>s+ringAreaM2(p[0]),0);
   return 0;
+}
+
+function cachedFeatureAreaM2(feature){
+  if(FEATURE_AREA_CACHE.has(feature)) return FEATURE_AREA_CACHE.get(feature);
+  const area=featureAreaM2(feature);
+  FEATURE_AREA_CACHE.set(feature,area);
+  return area;
+}
+
+/* Geometry bounds are used for viewport culling.  Keeping this independent of
+   Leaflet prevents creating thousands of map layers merely to find extents. */
+function geometryBbox(geometry) {
+  const coords=geometry?.coordinates;
+  if(!coords) return null;
+  let west=Infinity,south=Infinity,east=-Infinity,north=-Infinity;
+  const visit=value=>{
+    if(!Array.isArray(value)) return;
+    if(typeof value[0]==="number"&&typeof value[1]==="number"){
+      const [lng,lat]=value;
+      if(lng<west) west=lng;if(lng>east) east=lng;
+      if(lat<south) south=lat;if(lat>north) north=lat;
+      return;
+    }
+    value.forEach(visit);
+  };
+  visit(coords);
+  return Number.isFinite(west)?[west,south,east,north]:null;
+}
+
+function bboxIntersectsMap(bbox,bounds){
+  if(!bbox||!bounds) return false;
+  return bbox[2]>=bounds.getWest()&&bbox[0]<=bounds.getEast()&&
+    bbox[3]>=bounds.getSouth()&&bbox[1]<=bounds.getNorth();
+}
+
+function collectionBbox(features){
+  let west=Infinity,south=Infinity,east=-Infinity,north=-Infinity;
+  (features||[]).forEach(f=>{
+    const b=geometryBbox(f.geometry);if(!b) return;
+    if(b[0]<west)west=b[0];if(b[1]<south)south=b[1];
+    if(b[2]>east)east=b[2];if(b[3]>north)north=b[3];
+  });
+  return Number.isFinite(west)?[west,south,east,north]:null;
+}
+
+// At overview scales, drawing every parcel is neither legible nor responsive.
+// Keep an evenly distributed subset until zooming reduces the viewport set.
+function sampleForMap(features,limit){
+  if(features.length<=limit) return features;
+  const step=features.length/limit;
+  const sample=[];
+  for(let i=0;i<limit;i++) sample.push(features[Math.floor(i*step)]);
+  return sample;
+}
+
+function mapRenderBudget(geomType,zoom){
+  const base=geomType==="Polygon"?3500:geomType==="Line"?5000:9000;
+  if(zoom>=16) return base*3;
+  if(zoom>=14) return base*2;
+  return base;
+}
+
+/* ═══════════════════════════════════════════
+   CHUNKED / IDLE PROCESSING HELPER
+   Spreads heavy per-feature loops across idle
+   callbacks so the main thread never blocks
+   long enough for the tab to look frozen.
+═══════════════════════════════════════════ */
+const ric = (typeof window!=="undefined"&&window.requestIdleCallback)
+  ? window.requestIdleCallback
+  : (fn)=>setTimeout(()=>fn({timeRemaining:()=>8,didTimeout:true}),0);
+
+function chunkedForEach(items,fn,chunkSize=2500){
+  return new Promise(resolve=>{
+    let i=0;
+    function step(){
+      const end=Math.min(i+chunkSize,items.length);
+      for(;i<end;i++) fn(items[i],i);
+      if(i<items.length) ric(step);
+      else resolve();
+    }
+    step();
+  });
 }
 
 /* ═══════════════════════════════════════════
@@ -228,9 +314,9 @@ const ss=(extra={})=>({
   cursor:"pointer",outline:"none",...extra,
 });
 
-function Btn({onClick,active,children,title,disabled,style={}}){
+function Btn({onClick,active,children,title,disabled,style={},className=""}){
   return(
-    <button onClick={onClick} title={title} disabled={disabled}
+    <button onClick={onClick} title={title} disabled={disabled} className={className}
       style={{display:"flex",alignItems:"center",gap:6,padding:"0 12px",height:36,
         background:active?"var(--accent)":"var(--panel)",
         border:`1.5px solid ${active?"var(--accent)":"var(--border)"}`,
@@ -337,7 +423,7 @@ function buildChartData(features,field,geomType,chartMode,colorMap){
       :null;
     features.forEach(f=>{
       const v=String(f.properties?.[field]??"N/A");
-      const a=areaKey&&f.properties[areaKey]!=null?+f.properties[areaKey]||0:featureAreaM2(f);
+      const a=areaKey&&f.properties[areaKey]!=null?+f.properties[areaKey]||0:cachedFeatureAreaM2(f);
       totals[v]=(totals[v]||0)+a;
     });
   } else {
@@ -370,7 +456,7 @@ function ChartInner({built,chartType,isDark}){
     if(!ref.current||!built) return;
     if(inst.current){inst.current.destroy();inst.current=null;}
     const {labels,values,colors,unit,percentages}=built;
-    const tc=isDark?"#c8c4b8":"#1A2B4A", gc=isDark?"#1e2e42":"#e8e3d8";
+    const tc=isDark?"#ddd7ca":"#29322d", gc=isDark?"#2a3530":"#eadfce";
     const isPolar=chartType==="pie"||chartType==="donut";
     inst.current=new window.Chart(ref.current.getContext("2d"),{
       type:chartType==="area"?"line":chartType==="donut"?"doughnut":chartType,
@@ -436,7 +522,7 @@ function ChartWidget({layers,visibleFeatsByLayer,config,onConfigChange,isDark,co
   // Falls back to filtered-all-features on first load (before bounds are computed)
   const visibleFeats=useMemo(()=>{
     const vf=visibleFeatsByLayer[String(layer?.id)];
-    if(vf&&vf.length>0) return vf;
+    if(Array.isArray(vf)) return vf;
     // Bounds not computed yet — use all features but still apply filters
     const all=layer?.geojson?.features||[];
     return applyFilters?applyFilters(all,String(layer?.id)):all;
@@ -666,9 +752,9 @@ function GeolocateButton({mapRef}){
       if(markerRef.current){markerRef.current.remove();markerRef.current=null;}
       mapRef.current.setView([lat,lng],15);
       markerRef.current=L.circleMarker([lat,lng],{
-        radius:10,color:"#C8922A",fillColor:"#C8922A",fillOpacity:0.35,weight:3,
+        radius:10,color:"#ce7d35",fillColor:"#ce7d35",fillOpacity:0.35,weight:3,
       }).addTo(mapRef.current)
-        .bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;color:#1A2B4A;padding:4px"><strong>You are here</strong><br/><span style="color:#7a8fa8;font-size:10px">${lat.toFixed(5)}, ${lng.toFixed(5)}</span></div>`)
+        .bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;color:#29322d;padding:4px"><strong>You are here</strong><br/><span style="color:#667269;font-size:10px">${lat.toFixed(5)}, ${lng.toFixed(5)}</span></div>`)
         .openPopup();
       setTimeout(()=>setActive(false),3000);
     },err=>{
@@ -729,8 +815,8 @@ function GeocoderSearch({mapRef}){
     if(!mapRef.current) return;
     const L=window.L,lat=+r.lat,lon=+r.lon;
     mapRef.current.setView([lat,lon],14);
-    const m=L.circleMarker([lat,lon],{radius:8,color:"#C8922A",fillColor:"#C8922A",fillOpacity:1,weight:2}).addTo(mapRef.current);
-    m.bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;color:#1A2B4A;min-width:160px;padding:4px"><strong>${r.display_name.split(",")[0]}</strong><br/><span style="color:#7a8fa8;font-size:10px">${r.display_name.split(",").slice(1,3).join(",")}</span></div>`).openPopup();
+    const m=L.circleMarker([lat,lon],{radius:8,color:"#ce7d35",fillColor:"#ce7d35",fillOpacity:1,weight:2}).addTo(mapRef.current);
+    m.bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;color:#29322d;min-width:160px;padding:4px"><strong>${r.display_name.split(",")[0]}</strong><br/><span style="color:#667269;font-size:10px">${r.display_name.split(",").slice(1,3).join(",")}</span></div>`).openPopup();
     setTimeout(()=>m.remove(),8000);
     setOpen(false);setQ("");setResults([]);
   };
@@ -808,7 +894,7 @@ function SymbolEditor({layer,customColorMap={},customShapeMap={},customOpacityMa
   const isPoint=geomType==="Point",isPoly=geomType==="Polygon",isLine=geomType==="Line";
   const baseColorMap=useMemo(()=>buildColorMap(layer?.geojson?.features||[],primaryField),[layer,primaryField]);
   const cats=Object.keys(baseColorMap);
-  const getColor=cat=>customColorMap[cat]||baseColorMap[cat]||"#C8922A";
+  const getColor=cat=>customColorMap[cat]||baseColorMap[cat]||"#ce7d35";
   const getOutline=cat=>customOutlineColorMap[cat]||getColor(cat);
   const isHollow=cat=>!!customHollowMap[cat];
 
@@ -2363,7 +2449,7 @@ function ProjectsPage({onOpen,theme,onThemeToggle}){
 
   return(
     <div style={{minHeight:"100vh",background:"var(--bg)",fontFamily:"Inter,DM Sans,sans-serif",color:"var(--text)"}}>
-      <nav style={{height:60,background:"var(--panel)",borderBottom:"1.5px solid var(--border)",
+      <nav className="geohub-landing-nav" style={{height:60,background:"var(--panel)",borderBottom:"1.5px solid var(--border)",
         display:"flex",alignItems:"center",justifyContent:"space-between",
         padding:"0 32px",position:"sticky",top:0,zIndex:50,
         boxShadow:"0 2px 12px var(--shadow)"}}>
@@ -2389,7 +2475,7 @@ function ProjectsPage({onOpen,theme,onThemeToggle}){
         </button>
       </nav>
 
-      <div style={{background:isDark?"var(--panel)":"var(--navy)",
+      <div className="geohub-landing-hero" style={{background:isDark?"var(--panel)":"var(--navy)",
         padding:"48px 32px 36px",borderBottom:"1.5px solid var(--border)"}}>
         <div style={{maxWidth:900,margin:"0 auto"}}>
           <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.12em",color:"var(--accent)",marginBottom:10}}>
@@ -2407,9 +2493,19 @@ function ProjectsPage({onOpen,theme,onThemeToggle}){
         </div>
       </div>
 
-      <div style={{padding:"40px 32px",maxWidth:960,margin:"0 auto"}}>
-        <div style={{marginBottom:32}}>
-          <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",color:"var(--text-muted)",marginBottom:14}}>PROJECTS</div>
+      <section className="geohub-start-strip" aria-label="Getting started">
+        <div>
+          <div className="geohub-eyebrow">HOW IT WORKS</div>
+          <div className="geohub-start-copy">Create a workspace, add field data, then style your map and save a dashboard view.</div>
+        </div>
+        <div className="geohub-start-steps" aria-label="Three steps">
+          <span><b>01</b> Create project</span><span><b>02</b> Add data</span><span><b>03</b> Build a view</span>
+        </div>
+      </section>
+
+      <div className="geohub-projects-wrap" style={{padding:"40px 32px",maxWidth:960,margin:"0 auto"}}>
+        <div style={{marginBottom:32,display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
+          <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",color:"var(--text-muted)"}}>RECENT PROJECTS</div>
           {creating?(
             <div style={{display:"flex",gap:10,alignItems:"center",maxWidth:520}}>
               <input autoFocus value={newName} onChange={e=>setNewName(e.target.value)}
@@ -2431,7 +2527,7 @@ function ProjectsPage({onOpen,theme,onThemeToggle}){
               </button>
             </div>
           ):(
-            <button onClick={()=>setCreating(true)}
+            <button onClick={()=>setCreating(true)} className="geohub-primary-action"
               style={{display:"flex",alignItems:"center",gap:8,height:44,padding:"0 24px",
                 background:"var(--accent)",border:"none",borderRadius:10,cursor:"pointer",
                 fontSize:13,fontWeight:700,color:"#fff",fontFamily:"inherit",
@@ -2448,15 +2544,16 @@ function ProjectsPage({onOpen,theme,onThemeToggle}){
             Loading projects…
           </div>
         ):projects.length===0?(
-          <div style={{textAlign:"center",padding:"72px 32px",opacity:0.35}}>
+          <div className="geohub-empty-projects" style={{textAlign:"center",padding:"56px 32px"}}>
             <Icon name="folder" size={52} color="var(--text-muted)"/>
-            <div style={{marginTop:18,fontSize:16,fontWeight:600}}>No projects yet</div>
-            <div style={{marginTop:8,fontSize:13,color:"var(--text-muted)"}}>Create your first project above</div>
+            <div style={{marginTop:18,fontSize:16,fontWeight:700}}>Your map workspace starts here</div>
+            <div style={{marginTop:8,fontSize:13,color:"var(--text-muted)",lineHeight:1.6}}>Use the <b>New Project</b> button above to create a project, upload a layer, then shape the view around your investigation.</div>
           </div>
         ):(
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(268px,1fr))",gap:18}}>
+          <div className="geohub-project-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(268px,1fr))",gap:18}}>
             {projects.map(proj=>(
-              <div key={proj.id} onClick={()=>onOpen(proj)}
+              <div key={proj.id} onClick={()=>onOpen(proj)} className="geohub-project-card" tabIndex={0} role="button"
+                onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onOpen(proj);}}}
                 style={{background:"var(--panel)",border:"1.5px solid var(--border)",borderRadius:14,
                   padding:22,cursor:"pointer",transition:"all 0.18s",boxShadow:"0 2px 8px var(--shadow)"}}
                 onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--accent)";e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 10px 32px var(--shadow)";}}
@@ -2510,10 +2607,14 @@ function ProjectsPage({onOpen,theme,onThemeToggle}){
 function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
   const mapRef=useRef(null),mapDivRef=useRef(null),tileRef=useRef(null);
   const geoLayerRef=useRef(null),labelLayerRef=useRef(null),measureRef=useRef(null);
+  const vectorGridRef=useRef({});
   const tileLayersRef=useRef({}); // id→L.tileLayer for custom tile layers
   const highlightRef=useRef(null),highlightTimerRef=useRef(null);
   const boundsTimer=useRef(null),saveTimer=useRef(null),dashRef=useRef(null);
   const editorBodyRef=useRef(null);
+  const featureBboxCacheRef=useRef(new WeakMap());
+  const vgRebuildTimer=useRef(null);
+  const boundsUpdateSeq=useRef(0);
 
   const [project]       =useState(initProject);
   const [layers,setLayers]=useState(initProject.layers||[]);
@@ -2537,7 +2638,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
   const [visibleFeatsByLayer,setVisibleFeatsByLayer]=useState(()=>{
     const init={};
     (initProject.layers||[]).forEach(l=>{
-      if(l.geojson?.features) init[String(l.id)]=l.geojson.features;
+      if(l.geojson?.features) init[String(l.id)]=[];
     });
     return init;
   });
@@ -2622,6 +2723,14 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
   const fields=useMemo(()=>Object.keys(activeLayer?.geojson?.features?.[0]?.properties||{}),[activeLayer]);
   const totalFeatures=useMemo(()=>layers.filter(l=>l.visible).reduce((s,l)=>s+(l.geojson?.features?.length||0),0),[layers]);
   const totalVisible=Object.values(visibleFeatsByLayer).reduce((s,a)=>s+a.length,0);
+  const largeLayerMode=useMemo(()=>layers.some(l=>(l.geojson?.features?.length||0)>=LARGE_VECTOR_THRESHOLD),[layers]);
+  const layerBaseColorMaps=useMemo(()=>{
+    const maps={};
+    layers.filter(l=>l.type!=="tile").forEach(l=>{
+      maps[String(l.id)]=buildColorMap(l.geojson?.features||[],primaryField);
+    });
+    return maps;
+  },[layers,primaryField]);
 
   /* CSS vars */
   useEffect(()=>{Object.entries(THEMES[theme]).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));},[theme]);
@@ -2724,11 +2833,11 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
     const fn=e=>{
       pts.push(e.latlng);if(layer)layer.remove();
       if(measureMode==="distance"){
-        layer=L.polyline(pts,{color:"#C8922A",weight:3,dashArray:"8 5"}).addTo(map);
+        layer=L.polyline(pts,{color:"#ce7d35",weight:3,dashArray:"8 5"}).addTo(map);
         if(pts.length>1){let d=0;for(let i=1;i<pts.length;i++)d+=pts[i-1].distanceTo(pts[i]);
           setMeasureResult(d>1000?`${(d/1000).toFixed(2)} km`:`${Math.round(d)} m`);}
       }else{
-        layer=L.polygon(pts,{color:"#C8922A",weight:2,fillColor:"#C8922A",fillOpacity:0.12}).addTo(map);
+        layer=L.polygon(pts,{color:"#ce7d35",weight:2,fillColor:"#ce7d35",fillOpacity:0.12}).addTo(map);
         if(pts.length>2){
           let a=0;const n=pts.length;
           for(let i=0;i<n;i++){const p1=pts[i],p2=pts[(i+1)%n];
@@ -2750,23 +2859,30 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
     return features.filter(f=>passesAllFilters(filters,f,layerId));
   },[filters]);
 
-  const updateAllVisible=useCallback(bounds=>{
+  /* Chunked, non-blocking visibility computation.
+     A sequence guard makes sure that if the user pans again before a large
+     layer finishes its chunked pass, the stale pass's result is discarded
+     instead of overwriting newer data with old bounds. */
+  const updateAllVisible=useCallback(async bounds=>{
+    const mySeq=++boundsUpdateSeq.current;
+    const nonTile=layers.filter(l=>l.type!=="tile");
     const result={};
-    layers.filter(l=>l.type!=="tile").forEach(layer=>{
-      if(!layer.geojson) return;
-      const raw=(layer.geojson.features||[]).filter(f=>{
-        if(!f.geometry) return false;
-        const c=f.geometry.coordinates,gt=f.geometry.type;
-        if(gt==="Point")return bounds.contains([c[1],c[0]]);
-        if(gt==="MultiPoint")return c.some(p=>bounds.contains([p[1],p[0]]));
-        if(gt==="LineString")return c.some(p=>bounds.contains([p[1],p[0]]));
-        if(gt==="MultiLineString")return c.flat().some(p=>bounds.contains([p[1],p[0]]));
-        if(gt==="Polygon")return c[0].some(p=>bounds.contains([p[1],p[0]]));
-        if(gt==="MultiPolygon")return c.flat(2).some(p=>bounds.contains([p[1],p[0]]));
-        return true;
-      });
+    for(const layer of nonTile){
+      if(!layer.geojson||!layer.visible){result[String(layer.id)]=[];continue;}
+      const feats=layer.geojson.features||[];
+      const raw=[];
+      const chunkSize=feats.length>LARGE_VECTOR_THRESHOLD?3000:feats.length+1;
+      await chunkedForEach(feats,f=>{
+        if(!f?.geometry) return;
+        const cached=featureBboxCacheRef.current;
+        let bbox=cached.get(f);
+        if(!bbox){bbox=geometryBbox(f.geometry);cached.set(f,bbox);}
+        if(bboxIntersectsMap(bbox,bounds)) raw.push(f);
+      },chunkSize);
+      if(mySeq!==boundsUpdateSeq.current) return; // superseded by a newer pass — bail
       result[String(layer.id)]=applyFilters(raw,String(layer.id));
-    });
+    }
+    if(mySeq!==boundsUpdateSeq.current) return;
     setVisibleFeatsByLayer(result);
   },[layers,applyFilters]);
 
@@ -2790,29 +2906,32 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
     const L=window.L;
     if(geoLayerRef.current){geoLayerRef.current.remove();geoLayerRef.current=null;}
     if(labelLayerRef.current){labelLayerRef.current.remove();labelLayerRef.current=null;}
-    const vis=layers.filter(l=>l.visible&&l.type!=="tile");if(!vis.length) return;
+    const vis=layers.filter(l=>l.visible&&l.type!=="tile"&&(l.geojson?.features?.length||0)<LARGE_VECTOR_THRESHOLD);if(!vis.length) return;
 
     // Build per-layer color maps on the fly
     // customColorMap shape: { [layerId]: { [cat]: color } }
     const primaryLayer=layers.find(l=>String(l.id)===String(primaryLayerId))||layers[0];
 
-    // Pre-compute base color maps for all visible layers
-    const layerBaseMaps={};
-    vis.forEach(l=>{
-      const lid=String(l.id);
-      layerBaseMaps[lid]=buildColorMap(l.geojson?.features||[],primaryField);
-    });
-
+    const zoom=mapRef.current.getZoom();
     const allFeats=vis.flatMap(l=>{
-      const layerFeats=(l.geojson?.features||[]).map(f=>({
+      // Only create map features for the current viewport. Newly uploaded
+      // layers wait for the first bounds pass rather than briefly rendering in full.
+      const viewportFeatures=visibleFeatsByLayer[String(l.id)];
+      if(!Array.isArray(viewportFeatures)) return [];
+      const renderFeatures=sampleForMap(viewportFeatures,mapRenderBudget(l.geomType,zoom));
+      const layerFeats=renderFeatures.map(f=>({
         ...f,_lid:l.id,_lcolor:l.color,_lgeom:l.geomType||"Point",
         _isPrimary:String(l.id)===String(primaryLayer?.id),
       }));
-      return applyFilters(layerFeats,String(l.id));
+      return layerFeats;
     });
     const toRender=allFeats;
+    const useCanvasPoints=toRender.length>5000;
+    const deferPopups=toRender.length>2000;
+    const canvasRenderer=L.canvas({padding:0.25});
 
     geoLayerRef.current=L.geoJSON({type:"FeatureCollection",features:toRender},{
+      renderer:canvasRenderer,
       style:f=>{
         const lid=String(f._lid);
         const lCustomColors=customColorMap[lid]||{};
@@ -2820,10 +2939,10 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
         const lCustomOutlineWidths=customOutlineWidthMap[lid]||{};
         const lCustomHollow=customHollowMap[lid]||{};
         const lCustomOpacity=customOpacityMap[lid]||{};
-        const baseColors=layerBaseMaps[lid]||{};
+        const baseColors=layerBaseColorMaps[lid]||{};
         const mergedColors={...baseColors,...lCustomColors};
         const val=primaryField&&f.properties?.[primaryField]?String(f.properties[primaryField]):null;
-        const fillCol=(val&&mergedColors[val])||f._lcolor||"#C8922A";
+        const fillCol=(val&&mergedColors[val])||f._lcolor||"#ce7d35";
         const outlineCol=(val&&lCustomOutlineColors[val])||fillCol;
         const outlineW=(val&&lCustomOutlineWidths[val])||( f._lgeom==="Line"?2.5:1.5);
         const hollow=val&&lCustomHollow[val];
@@ -2842,12 +2961,17 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
         const lCustomColors=customColorMap[lid]||{};
         const lCustomShapes=customShapeMap[lid]||{};
         const lCustomSizes=customSizeMap[lid]||{};
-        const baseColors=layerBaseMaps[lid]||{};
+        const baseColors=layerBaseColorMaps[lid]||{};
         const mergedColors={...baseColors,...lCustomColors};
         const val=primaryField&&f.properties?.[primaryField]?String(f.properties[primaryField]):null;
-        const col=(val&&mergedColors[val])||f._lcolor||"#C8922A";
+        const col=(val&&mergedColors[val])||f._lcolor||"#ce7d35";
         const shape=(val&&lCustomShapes[val])||"circle";
         const sz=(val&&lCustomSizes[val])||16;
+        if(useCanvasPoints) return L.circleMarker(latlng,{
+          renderer:canvasRenderer,radius:Math.max(3,Math.min(9,sz/2)),
+          color:col,weight:1.25,fillColor:col,fillOpacity:0.82,
+          opacity:layerOpacity[f._lid]??1,
+        });
         return L.marker(latlng,{
           icon:L.divIcon({html:makePointSVG(shape,col,sz),className:"geo-div-icon",iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]}),
           opacity:layerOpacity[f._lid]??1,
@@ -2855,22 +2979,26 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
       },
       onEachFeature:(f,layer)=>{
         const props=f.properties||{};
-        const rows=Object.entries(props).filter(([k])=>!k.startsWith("_")).slice(0,12).map(([k,v])=>
-          `<div style="display:flex;gap:10px;padding:4px 0;border-bottom:1px solid #ddd8cc">
-            <span style="color:#5a6e85;min-width:90px;font-size:11px;flex-shrink:0;font-family:Inter,sans-serif">${k}</span>
-            <span style="color:#1A2B4A;font-size:11px;word-break:break-all;font-family:Inter,sans-serif">${String(v)}</span>
-          </div>`).join("");
-        layer.bindPopup(
-          `<div style="background:#fff;border:1.5px solid #d8d3c8;border-radius:10px;padding:14px;min-width:220px">
-            <div style="color:#C8922A;font-weight:700;margin-bottom:10px;font-size:12px;font-family:Inter,sans-serif;letter-spacing:.04em">FEATURE PROPERTIES</div>
+        const popup=()=>{
+          const rows=Object.entries(props).filter(([k])=>!k.startsWith("_")).slice(0,12).map(([k,v])=>
+            `<div style="display:flex;gap:10px;padding:4px 0;border-bottom:1px solid #ddd8cc">
+              <span style="color:#5a6e85;min-width:90px;font-size:11px;flex-shrink:0;font-family:Inter,sans-serif">${k}</span>
+              <span style="color:#29322d;font-size:11px;word-break:break-all;font-family:Inter,sans-serif">${String(v)}</span>
+            </div>`).join("");
+          return `<div style="background:#fff;border:1.5px solid #d8d3c8;border-radius:10px;padding:14px;min-width:220px">
+            <div style="color:#ce7d35;font-weight:700;margin-bottom:10px;font-size:12px;font-family:Inter,sans-serif;letter-spacing:.04em">FEATURE PROPERTIES</div>
             ${rows||"<span style='color:#888;font-size:11px'>No properties</span>"}
-          </div>`,{maxWidth:320,className:"geo-popup"}
-        );
+          </div>`;
+        };
+        if(deferPopups) layer.on("click",()=>layer.bindPopup(popup(),{maxWidth:320,className:"geo-popup"}).openPopup());
+        else layer.bindPopup(popup(),{maxWidth:320,className:"geo-popup"});
       },
     }).addTo(mapRef.current);
 
     /* Labels — FIX: use iconSize:null so div sizes itself naturally */
-    if(showLabels&&labelField){
+    // Labels are intentionally held back above this threshold: thousands of
+    // HTML label nodes make pan/zoom unusable, while feature popups remain available.
+    if(showLabels&&labelField&&toRender.length<=2000){
       const lg=L.layerGroup();
       toRender.forEach(f=>{
         const lbl=f.properties?.[labelField];if(!lbl) return;
@@ -2883,7 +3011,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
         L.marker(latlng,{
           icon:L.divIcon({
             // No iconSize constraint — div sizes to content, fixing label truncation
-            html:`<div style="display:inline-block;background:rgba(26,43,74,0.88);color:#C8922A;font-size:10px;line-height:1.4;padding:3px 8px;border-radius:5px;white-space:nowrap;border:1px solid rgba(200,146,42,0.4);font-family:Inter,DM Sans,sans-serif;pointer-events:none;font-weight:600">${String(lbl)}</div>`,
+            html:`<div style="display:inline-block;background:rgba(30,40,35,0.9);color:#f4f0e7;font-size:10px;line-height:1.4;padding:3px 8px;border-radius:5px;white-space:nowrap;border:1px solid rgba(206,125,53,0.48);font-family:Inter,DM Sans,sans-serif;pointer-events:none;font-weight:600">${String(lbl)}</div>`,
             className:"geo-label",
             iconSize:null,   // ← KEY FIX: let the div size itself
             iconAnchor:[0,20],
@@ -2894,7 +3022,66 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
     }
   },[layers,customColorMap,customShapeMap,customOpacityMap,customSizeMap,
      customOutlineColorMap,customOutlineWidthMap,customHollowMap,
-     layerOpacity,primaryLayerId,primaryField,showLabels,labelField,applyFilters]);
+     layerOpacity,primaryLayerId,primaryField,showLabels,labelField,visibleFeatsByLayer,layerBaseColorMaps]);
+
+  /* Large-vector pipeline: slice GeoJSON into canvas vector tiles. This keeps
+     the interaction model while avoiding one Leaflet layer per parcel.
+     Debounced so rapid style edits (opacity/colour sliders) don't trigger a
+     full re-slice of tens of thousands of features on every input event. */
+  useEffect(()=>{
+    clearTimeout(vgRebuildTimer.current);
+    vgRebuildTimer.current=setTimeout(()=>{
+      if(!mapRef.current||!window.L?.vectorGrid?.slicer) return;
+      const L=window.L,map=mapRef.current;
+      Object.values(vectorGridRef.current).forEach(grid=>grid.remove());
+      vectorGridRef.current={};
+
+      layers.filter(l=>l.visible&&l.type!=="tile"&&(l.geojson?.features?.length||0)>=LARGE_VECTOR_THRESHOLD)
+        .forEach(layer=>{
+          const lid=String(layer.id);
+          const features=applyFilters(layer.geojson.features||[],lid);
+          const baseColors=layerBaseColorMaps[lid]||{};
+          const customColors=customColorMap[lid]||{};
+          const customOutlineColors=customOutlineColorMap[lid]||{};
+          const customOutlineWidths=customOutlineWidthMap[lid]||{};
+          const customOpacity=customOpacityMap[lid]||{};
+          const customHollow=customHollowMap[lid]||{};
+          const layerOp=layerOpacity[layer.id]??1;
+          const style=props=>{
+            const value=primaryField&&props?.[primaryField]!=null?String(props[primaryField]):null;
+            const color=(value&&(customColors[value]||baseColors[value]))||layer.color||"#ce7d35";
+            const hollow=value&&customHollow[value];
+            return {
+              fill:!hollow,fillColor:color,fillOpacity:(hollow?0:(value?(customOpacity[value]??0.82):0.82))*layerOp,
+              color:(value&&customOutlineColors[value])||color,
+              opacity:layerOp,weight:(value&&customOutlineWidths[value])||(layer.geomType==="Line"?2.5:1.15),
+              radius:4,
+            };
+          };
+          const grid=L.vectorGrid.slicer({type:"FeatureCollection",features},{
+            rendererFactory:L.canvas.tile,
+            interactive:true,
+            maxZoom:19,           // tiles beyond this are never requested — was 22
+            indexMaxZoom:7,       // bounds upfront geojson-vt indexing cost
+            indexMaxPoints:100000,
+            tolerance:3,          // per-zoom simplification — big win for dense boundaries
+            extent:4096,buffer:64,
+            vectorTileLayerStyles:{sliced:style},
+          }).addTo(map);
+          grid.on("click",e=>{
+            const props=e.layer?.properties||{};
+            const rows=Object.entries(props).filter(([k])=>!k.startsWith("_")).slice(0,12).map(([k,v])=>
+              `<div style="display:flex;gap:10px;padding:4px 0;border-bottom:1px solid #ddd8cc"><span style="color:#667269;min-width:90px;font-size:11px">${k}</span><span style="color:#29322d;font-size:11px;word-break:break-all">${String(v)}</span></div>`).join("");
+            L.popup({maxWidth:320,className:"geo-popup"}).setLatLng(e.latlng).setContent(
+              `<div style="background:#fff;border:1.5px solid #d8c9b3;border-radius:10px;padding:14px;min-width:220px"><div style="color:#ce7d35;font-weight:700;margin-bottom:10px;font-size:12px;letter-spacing:.04em">FEATURE PROPERTIES</div>${rows||"<span style='color:#888;font-size:11px'>No properties</span>"}</div>`
+            ).openOn(map);
+          });
+          vectorGridRef.current[lid]=grid;
+        });
+    },250); // debounce — waits for slider drags / rapid edits to settle
+    return()=>clearTimeout(vgRebuildTimer.current);
+  },[layers,applyFilters,layerBaseColorMaps,customColorMap,customOutlineColorMap,
+     customOutlineWidthMap,customOpacityMap,customHollowMap,layerOpacity,primaryField]);
 
   /* Sync custom tile layers (type:"tile") on the map */
   useEffect(()=>{
@@ -2930,7 +3117,11 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
   },[layers]);
   useEffect(()=>{
     if(!mapRef.current||!activeLayer?.geojson?.features?.length) return;
-    try{const b=window.L.geoJSON(activeLayer.geojson).getBounds();if(b.isValid())mapRef.current.fitBounds(b,{padding:[40,40]});}catch{}
+    try{
+      const b=collectionBbox(activeLayer.geojson.features);
+      if(!b) return;
+      mapRef.current.fitBounds([[b[1],b[0]],[b[3],b[2]]],{padding:[40,40]});
+    }catch{}
   },[activeLayer?.id]);
 
   /* ─── Attribute table support: zoom-to-feature + bulk edit + delete ─── */
@@ -2957,8 +3148,8 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
       if(highlightRef.current){highlightRef.current.remove();highlightRef.current=null;}
       clearTimeout(highlightTimerRef.current);
       highlightRef.current=L.geoJSON(feature,{
-        style:{color:"#C8922A",weight:4,fillColor:"#C8922A",fillOpacity:0.25,dashArray:"6 4"},
-        pointToLayer:(f,latlng)=>L.circleMarker(latlng,{radius:14,color:"#C8922A",weight:4,fillColor:"#C8922A",fillOpacity:0.25}),
+        style:{color:"#ce7d35",weight:4,fillColor:"#ce7d35",fillOpacity:0.25,dashArray:"6 4"},
+        pointToLayer:(f,latlng)=>L.circleMarker(latlng,{radius:14,color:"#ce7d35",weight:4,fillColor:"#ce7d35",fillOpacity:0.25}),
       }).addTo(map);
       highlightTimerRef.current=setTimeout(()=>{highlightRef.current?.remove();highlightRef.current=null;},2200);
     }catch{}
@@ -3019,6 +3210,19 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
     // Ensure FeatureCollection
     if(geojson.type==="Feature") geojson={type:"FeatureCollection",features:[geojson]};
     if(!geojson.features) throw new Error("Could not parse features from "+file.name);
+
+    // Very large / vertex-heavy layers (e.g. detailed parcel boundaries) are
+    // the most common cause of a frozen tab: the vector-tile indexer and the
+    // viewport-culling pass both have to walk every coordinate of every
+    // feature. A light simplification pass (imperceptible at normal zoom,
+    // ~3m tolerance) can cut vertex counts — and therefore indexing time —
+    // by 70-90% on dense boundary data, with no visible loss of shape.
+    if(geojson.features.length>LARGE_VECTOR_THRESHOLD&&window.turf){
+      setLoadMsg(`Simplifying ${geojson.features.length.toLocaleString()} features…`);
+      try{
+        geojson=window.turf.simplify(geojson,{tolerance:0.00003,highQuality:false,mutate:true});
+      }catch{ /* if simplify fails for any reason, fall back to raw geometry */ }
+    }
 
     const gType=detectGeomType(geojson);
     return{id:Date.now()+Math.random(),name,geojson,visible:true,geomType:gType,
@@ -3104,7 +3308,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
       background:"var(--bg)",fontFamily:"Inter,DM Sans,sans-serif",color:"var(--text)"}}>
 
       {/* TOPBAR */}
-      <header style={{height:54,background:"var(--panel)",borderBottom:"1.5px solid var(--border)",
+      <header className="geohub-topbar" style={{height:54,background:"var(--panel)",borderBottom:"1.5px solid var(--border)",
         display:"flex",alignItems:"center",padding:"0 14px",flexShrink:0,zIndex:100,gap:10,
         boxShadow:"0 2px 10px var(--shadow)"}}>
         <button onClick={onBack} title="Back to projects"
@@ -3122,7 +3326,8 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
               </div>
           }
           <input ref={logoInputRef} type="file" accept="image/*" hidden onChange={e=>{
-            const f=e.target.files?.[0];if(f)setLogoUrl(URL.createObjectURL(f));
+            const f=e.target.files?.[0];
+            if(f){const reader=new FileReader();reader.onload=()=>setLogoUrl(String(reader.result));reader.readAsDataURL(f);}
           }}/>
         </div>
         <div style={{width:1,height:22,background:"var(--border)",flexShrink:0}}/>
@@ -3139,8 +3344,12 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
         }
         {saving&&<span style={{fontSize:10,color:"var(--text-muted)",flexShrink:0,fontStyle:"italic"}}>saving…</span>}
 
+        {largeLayerMode&&<span title="Large layers draw viewport detail progressively: zoom in to see every feature"
+          style={{fontSize:9,color:"var(--accent)",border:"1px solid var(--accent)",borderRadius:999,
+            padding:"3px 7px",fontWeight:700,letterSpacing:"0.05em",flexShrink:0}}>ADAPTIVE DETAIL</span>}
+
         {/* Stats */}
-        <div style={{display:"flex",gap:24,alignItems:"center",margin:"0 auto"}}>
+        <div className="geohub-stats" style={{display:"flex",gap:24,alignItems:"center",margin:"0 auto"}}>
           {[["Layers",layers.length],["Total",totalFeatures.toLocaleString()],["Visible",totalVisible.toLocaleString()]].map(([l,v])=>(
             <div key={l} style={{textAlign:"center"}}>
               <div style={{fontSize:16,fontWeight:800,color:"var(--accent)",lineHeight:1}}>{v}</div>
@@ -3150,7 +3359,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
         </div>
 
         {/* Actions */}
-        <div style={{display:"flex",gap:7,alignItems:"center",flexShrink:0}}>
+        <div className="geohub-topbar-actions" style={{display:"flex",gap:7,alignItems:"center",flexShrink:0}}>
           {loading&&(
             <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--text-muted)"}}>
               <div style={{width:13,height:13,border:"2px solid var(--accent)",borderTopColor:"transparent",
@@ -3186,14 +3395,14 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
               {LAYOUT_TEMPLATES[layoutKey]?.label||"Layout"}
             </Btn>
           )}
-          <Btn onClick={()=>setTableOpen(p=>!p)} active={tableOpen} disabled={!layers.length}
+          <Btn className="geohub-utility" onClick={()=>setTableOpen(p=>!p)} active={tableOpen} disabled={!layers.length}
             title="Attribute table">
             <Icon name="table" size={13} color={tableOpen?"#fff":"var(--text-muted)"}/> Table
           </Btn>
-          <Btn onClick={()=>setExportOpen(true)} title="Capture a screenshot using your laptop's native tool">
+          <Btn className="geohub-utility" onClick={()=>setExportOpen(true)} title="Capture a screenshot using your laptop's native tool">
             <Icon name="export" size={13} color="var(--text-muted)"/> Capture
           </Btn>
-          <Btn onClick={()=>setAnalysisOpen(true)} title="Spatial analysis tools">
+          <Btn className="geohub-utility" onClick={()=>setAnalysisOpen(true)} title="Spatial analysis tools">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><path d="M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12"/>
             </svg>
@@ -3249,7 +3458,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
           <>
             {/* Sidebar */}
             {!chartsHidden&&(
-            <div style={{width:380,flexShrink:0,background:"var(--panel)",
+            <div className="geohub-analytics-sidebar" style={{width:380,flexShrink:0,background:"var(--panel)",
               borderRight:"1.5px solid var(--border)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
               {/* Sidebar header */}
               <div style={{padding:"10px 16px",borderBottom:"1.5px solid var(--border)",
@@ -3463,7 +3672,7 @@ function Dashboard({project:initProject,onBack,theme,onThemeToggle}){
 
         {/* LAYER PANEL */}
         {layerPanelOpen&&(
-          <div style={{position:"absolute",right:0,top:0,bottom:0,width:290,
+          <div className="geohub-layer-panel" style={{position:"absolute",right:0,top:0,bottom:0,width:290,
             background:"var(--panel)",borderLeft:"1.5px solid var(--border)",
             zIndex:600,display:"flex",flexDirection:"column",
             boxShadow:"-4px 0 24px var(--shadow)"}}>
@@ -3650,7 +3859,36 @@ export default function App(){
   useEffect(()=>{
     if(document.getElementById("geohub-root-css")) return;
     const el=document.createElement("style");el.id="geohub-root-css";
-    el.textContent=`*{box-sizing:border-box;margin:0;padding:0}body,html,#root{height:100%;width:100%;font-family:Inter,'DM Sans',sans-serif}@keyframes spin{to{transform:rotate(360deg)}}@keyframes loadbar{0%{width:0%;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0%;margin-left:100%}}`;
+    el.textContent=`
+      *{box-sizing:border-box;margin:0;padding:0}
+      body,html,#root{height:100%;width:100%;font-family:Inter,'DM Sans',sans-serif;background:var(--bg);letter-spacing:.003em}
+      button,input,select{font:inherit}
+      button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+      .geohub-landing-hero{position:relative;overflow:hidden;background-image:linear-gradient(115deg,rgba(0,0,0,.15),transparent 58%)!important}
+      .geohub-landing-hero>div{position:relative;z-index:1}
+      .geohub-landing-hero:before{content:"";position:absolute;width:42rem;height:42rem;right:-17rem;top:-21rem;border:1px solid rgba(206,125,53,.28);border-radius:48% 52% 46% 54%/52% 44% 56% 48%;box-shadow:0 0 0 32px rgba(206,125,53,.035),0 0 0 68px rgba(206,125,53,.026),0 0 0 112px rgba(206,125,53,.018);transform:rotate(-16deg)}
+      .geohub-landing-hero:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.48;background:repeating-radial-gradient(ellipse at 88% 45%,transparent 0 18px,rgba(206,125,53,.13) 19px 20px,transparent 21px 34px)}
+      .geohub-project-card{position:relative;overflow:hidden;background:linear-gradient(145deg,var(--panel),var(--panel2))!important;border-color:transparent!important;box-shadow:inset 0 0 0 1px var(--border),0 10px 22px rgba(0,0,0,.08)!important}
+      .geohub-project-card:before{content:"";position:absolute;inset:0 0 auto;height:4px;background:linear-gradient(90deg,var(--accent),rgba(206,125,53,0));opacity:.9}
+      .geohub-project-card:nth-child(3n+2):before{background:linear-gradient(90deg,#6f9a78,rgba(111,154,120,0))}
+      .geohub-project-card:nth-child(3n):before{background:linear-gradient(90deg,#a75043,rgba(167,80,67,0))}
+      .geohub-project-card:hover{box-shadow:inset 0 0 0 1px var(--accent),0 18px 34px rgba(0,0,0,.18)!important}
+      .geohub-project-card:focus-visible{border-color:var(--accent)!important}
+      .geohub-project-card>div:first-child{background:rgba(206,125,53,.11)!important;border-color:rgba(206,125,53,.25)!important}
+      .geohub-empty-projects{max-width:540px;margin:0 auto;border:1px dashed var(--border);border-radius:18px;background:radial-gradient(circle at 50% 0,var(--accent-soft),transparent 48%),var(--panel2)}
+      .geohub-start-strip{max-width:960px;margin:20px auto 0;padding:18px 24px;display:grid;grid-template-columns:1.25fr 1fr;align-items:center;gap:24px;border:1px solid var(--border);border-radius:14px;background:var(--panel);box-shadow:0 8px 18px var(--shadow)}
+      .geohub-eyebrow{font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--accent);margin-bottom:5px}
+      .geohub-start-copy{font-size:12px;line-height:1.55;color:var(--text-muted);max-width:365px}
+      .geohub-start-steps{display:flex;gap:12px;flex-wrap:wrap;color:var(--text-muted);font-size:11px}
+      .geohub-start-steps b{color:var(--accent);font-size:10px;letter-spacing:.06em;margin-right:4px}
+      .geohub-primary-action{display:flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:0 18px;border:1px solid rgba(255,255,255,.13);border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:12px;font-weight:750;letter-spacing:.035em;cursor:pointer;box-shadow:0 5px 16px rgba(120,57,26,.26);transition:transform .16s ease,box-shadow .16s ease,filter .16s ease}
+      .geohub-primary-action:hover{transform:translateY(-2px);filter:saturate(1.08);box-shadow:0 12px 24px rgba(120,57,26,.32)}
+      .geohub-topbar{background:linear-gradient(90deg,var(--panel),var(--panel2))!important}
+      @media(max-width:1120px){.geohub-stats{display:none!important}.geohub-topbar-actions{margin-left:auto;max-width:calc(100vw - 340px);overflow-x:auto;padding:2px}}
+      @media(max-width:720px){.geohub-landing-nav{padding:0 18px!important}.geohub-landing-hero{padding:34px 20px 30px!important}.geohub-start-strip{margin:0 20px;padding:18px 0;grid-template-columns:1fr;gap:14px}.geohub-projects-wrap{padding:28px 20px!important}.geohub-project-grid{grid-template-columns:1fr!important}.geohub-topbar{padding:0 8px!important;gap:6px!important}.geohub-topbar-actions{gap:5px!important;max-width:calc(100vw - 130px)}}
+      @keyframes spin{to{transform:rotate(360deg)}}
+      @keyframes loadbar{0%{width:0%;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0%;margin-left:100%}}
+    `;
     document.head.appendChild(el);
     if(!document.querySelector('link[href*="fonts.googleapis"]')){
       const l=document.createElement("link");l.rel="stylesheet";
@@ -3667,23 +3905,23 @@ export default function App(){
       loadScript(CDN.html2canvas),loadScript(CDN.jspdf),
       loadScript(CDN.togeojson),loadScript(CDN.jszip),loadScript(CDN.turf),
       loadScript(CDN.leaflet_image),
-    ]).then(()=>setReady(true)).catch(console.error);
+    ]).then(()=>loadScript(CDN.vectorgrid)).then(()=>setReady(true)).catch(console.error);
   },[]);
 
   const toggleTheme=()=>setTheme(t=>t==="dark"?"light":"dark");
 
   if(!ready) return(
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-      height:"100vh",background:"#0f1923",gap:20}}>
+      height:"100vh",background:"#121816",gap:20}}>
       <svg width="52" height="52" viewBox="0 0 36 36">
-        <polygon points="18,3 33,30 3,30" fill="#1A2B4A" stroke="#C8922A" strokeWidth="1.5"/>
-        <polygon points="18,10 26,25 10,25" fill="#C8922A" opacity="0.85"/>
+        <polygon points="18,3 33,30 3,30" fill="#28332e" stroke="#ce7d35" strokeWidth="1.5"/>
+        <polygon points="18,10 26,25 10,25" fill="#ce7d35" opacity="0.85"/>
       </svg>
-      <div style={{color:"#C8922A",fontFamily:"Inter,sans-serif",fontSize:15,fontWeight:700,letterSpacing:"0.04em"}}>
+      <div style={{color:"#ce7d35",fontFamily:"Inter,sans-serif",fontSize:15,fontWeight:700,letterSpacing:"0.04em"}}>
         Loading GeoHub…
       </div>
       <div style={{width:180,height:3,background:"#1c2a3d",borderRadius:3,overflow:"hidden"}}>
-        <div style={{height:"100%",background:"#C8922A",borderRadius:3,animation:"loadbar 1.8s ease-in-out infinite"}}/>
+        <div style={{height:"100%",background:"#ce7d35",borderRadius:3,animation:"loadbar 1.8s ease-in-out infinite"}}/>
       </div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}@keyframes loadbar{0%{width:0%;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0%;margin-left:100%}}`}</style>
     </div>
